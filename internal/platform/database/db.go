@@ -16,6 +16,8 @@ type Service interface {
 
 	// Close the database connection
 	CloseDB()
+
+	Pool() *pgxpool.Pool
 }
 
 type service struct {
@@ -60,6 +62,8 @@ func InitDB() (Service, error) {
 	dbService = &service{pool: pool}
 	return dbService, nil
 }
+
+func (s *service) Pool() *pgxpool.Pool { return s.pool }
 
 func (s *service) CloseDB() {
 	log.Printf("Disconnected from database: %s", database)

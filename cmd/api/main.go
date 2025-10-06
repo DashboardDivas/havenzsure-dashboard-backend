@@ -27,7 +27,7 @@ func main() {
 	defer databaseService.CloseDB()
 
 	// Initialize the HTTP server
-	server := server.NewServer()
+	server := server.NewServer(databaseService.Pool())
 
 	// Create a done channel to signal when the shutdown is complete
 	done := make(chan bool, 1)

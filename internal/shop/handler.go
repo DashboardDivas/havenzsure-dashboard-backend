@@ -1,3 +1,4 @@
+// Citation: Chatgpt prompts: can you help me structure my handler.go based on repository.go, model.go, errors.go and service.go?
 // internal/shop/handler.go
 package shop
 

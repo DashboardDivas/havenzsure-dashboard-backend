@@ -1,12 +1,27 @@
-// using Chatgpt to help with writing comments
+// Citation:　Use of Chatgpt for writing service layer validation, normalization and writing comments
+// Edited and reviewed by AN-NI HUANG
+// Date: 2025-10-19
 package shop
 
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 )
 
-// TODO: Implement validateShopInput in service layer.
+// Importing regexp for validation
+var (
+	postalCodeRegex = regexp.MustCompile(`^[A-Z][0-9][A-Z][0-9][A-Z][0-9]$`)
+	phoneRegex      = regexp.MustCompile(`^[0-9]{3}-[0-9]{3}-[0-9]{4}$`)
+	emailRegex      = regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+
+	validProvinces = map[string]bool{
+		"AB": true, "BC": true, "MB": true, "NB": true,
+		"NL": true, "NT": true, "NS": true, "NU": true,
+		"ON": true, "PE": true, "QC": true, "SK": true, "YT": true,
+	}
+)
 
 // ShopService defines business operations for the Shop domain.
 // The service coordinates domain logic and delegates persistence to Repository.
@@ -47,14 +62,17 @@ func NewService(repo Repository) *service {
 	return &service{repo: repo}
 }
 
-// CreateShop performs minimal validation, then delegates to the repository.
+// CreateShop performs normalization and validation before delegating to the repository.
 // The repository fills in generated fields via the pointer (e.g., shop.ID).
 // Errors are wrapped with context ("service create shop") so logs show WHERE
 // failures occurred; the original error is preserved with %w for errors.Is/As.
 func (svc *service) CreateShop(ctx context.Context, s *Shop) error {
-	if s == nil {
-		return ErrInvalidInput
+	normalizeShop(s)
+
+	if err := validateShop(s); err != nil {
+		return err
 	}
+
 	if err := svc.repo.CreateShop(ctx, s); err != nil {
 		return fmt.Errorf("service create shop: %w", err)
 	}
@@ -90,17 +108,97 @@ func (svc *service) ListShops(ctx context.Context, limit, offset int) ([]*Shop, 
 	return shops, nil
 }
 
-// UpdateShop validates the input pointer and delegates to the repository,
+// UpdateShop normalizes and validates the input shop and delegates to the repository,
 // which returns a fully refreshed record from the database.
 // Useful when the UI needs to reflect server-side canonical values (e.g., trimmed
 // fields, normalized casing, updated timestamps).
 func (svc *service) UpdateShop(ctx context.Context, s *Shop) (*Shop, error) {
-	if s == nil {
-		return nil, ErrInvalidInput
+
+	normalizeShop(s)
+
+	if err := validateShop(s); err != nil {
+		return nil, err
 	}
 	shop, err := svc.repo.UpdateShop(ctx, s)
 	if err != nil {
 		return nil, fmt.Errorf("service update shop: %w", err)
 	}
 	return shop, nil
+}
+
+// normalizeShop trims whitespace and normalizes casing for certain fields.
+func normalizeShop(s *Shop) {
+	s.Code = strings.ToUpper(strings.TrimSpace(s.Code))
+	s.ShopName = strings.TrimSpace(s.ShopName)
+	s.Address = strings.TrimSpace(s.Address)
+	s.City = strings.TrimSpace(s.City)
+	s.Province = strings.ToUpper(strings.TrimSpace(s.Province))
+	s.PostalCode = strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(s.PostalCode), " ", ""))
+	s.ContactName = strings.TrimSpace(s.ContactName)
+	s.Phone = strings.TrimSpace(s.Phone)
+	s.Email = strings.ToLower(strings.TrimSpace(s.Email))
+}
+
+// validateShop checks the Shop fields for validity and returns appropriate ValidationError instances.
+func validateShop(s *Shop) error {
+
+	if s.Code == "" {
+		return NewValidationError("code", "code is required")
+	}
+	if len(s.Code) < 2 {
+		return NewValidationError("code", "code must be at least 2 characters")
+	}
+	if len(s.Code) > 10 {
+		return NewValidationError("code", "code must not exceed 10 characters")
+	}
+
+	if s.ShopName == "" {
+		return NewValidationError("shopName", "shop name is required")
+	}
+
+	if s.Status != Active && s.Status != Inactive {
+		return NewValidationError("status", "status must be 'active' or 'inactive'")
+	}
+
+	if s.Address == "" {
+		return NewValidationError("address", "address is required")
+	}
+
+	if s.City == "" {
+		return NewValidationError("city", "city is required")
+	}
+
+	if s.Province == "" {
+		return NewValidationError("province", "province is required")
+	}
+	if !validProvinces[s.Province] {
+		return NewValidationError("province", "invalid province code")
+	}
+
+	if s.PostalCode == "" {
+		return NewValidationError("postalCode", "postal code is required")
+	}
+	if !postalCodeRegex.MatchString(s.PostalCode) {
+		return NewValidationError("postalCode", "postal code must be in format A1A1A1")
+	}
+
+	if s.ContactName == "" {
+		return NewValidationError("contactName", "contact name is required")
+	}
+
+	if s.Phone == "" {
+		return NewValidationError("phone", "phone is required")
+	}
+	if !phoneRegex.MatchString(s.Phone) {
+		return NewValidationError("phone", "phone must be in format 403-555-1234")
+	}
+
+	if s.Email == "" {
+		return NewValidationError("email", "email is required")
+	}
+	if !emailRegex.MatchString(s.Email) {
+		return NewValidationError("email", "invalid email format")
+	}
+
+	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -159,6 +160,10 @@ func httpError(w http.ResponseWriter, status int, msg string) {
 // - ErrNotFound     → 404
 // - others          → 500
 func writeError(w http.ResponseWriter, err error) {
+	// Log the error for server-side diagnostics
+	log.Printf("[ERROR] %v", err)
+
+	// Map domain errors to HTTP status codes
 	switch {
 	case errors.Is(err, ErrInvalidInput):
 		httpError(w, http.StatusBadRequest, "invalid input")

@@ -31,7 +31,11 @@
 
 package shop
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Status string
 
@@ -41,7 +45,7 @@ const (
 )
 
 type Shop struct {
-	ID          int64     `db:"id"           json:"id"`
+	ID          uuid.UUID `db:"id"           json:"id"`
 	Code        string    `db:"code"         json:"code"`
 	ShopName    string    `db:"shop_name"    json:"shopName"`
 	Status      Status    `db:"status"       json:"status"`

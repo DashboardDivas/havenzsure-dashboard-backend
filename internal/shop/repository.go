@@ -74,7 +74,7 @@ WHERE code=$1;`
 
 func (r *PGRepository) ListShops(ctx context.Context, limit, offset int) ([]*Shop, error) {
 	const q = `
-SELECT id, code, shop_name, status, city, province, contact_name, phone
+SELECT id, code, shop_name, status, address, city, province, postal_code, contact_name, phone, email, created_at, updated_at
 FROM app.shop
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;`
@@ -84,10 +84,12 @@ LIMIT $1 OFFSET $2;`
 	}
 	defer rows.Close()
 
-	var shops []*Shop
+	// Initialize an empty slice to ensure JSON returns []
+	shops := make([]*Shop, 0)
+
 	for rows.Next() {
 		shop := new(Shop)
-		if err := rows.Scan(&shop.ID, &shop.Code, &shop.ShopName, &shop.Status, &shop.City, &shop.Province, &shop.ContactName, &shop.Phone); err != nil {
+		if err := rows.Scan(&shop.ID, &shop.Code, &shop.ShopName, &shop.Status, &shop.Address, &shop.City, &shop.Province, &shop.PostalCode, &shop.ContactName, &shop.Phone, &shop.Email, &shop.CreatedAt, &shop.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan shop row: %w", err)
 		}
 		shops = append(shops, shop)

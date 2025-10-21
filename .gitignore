@@ -1,5 +1,7 @@
-# Ignore .env file
+# Environment & secrets
 .env
-
+secret/
+service_account.json
 # Ignore vsCode settings folder
 .vscode/
+

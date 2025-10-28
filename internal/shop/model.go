@@ -45,17 +45,17 @@ const (
 )
 
 type Shop struct {
-	ID          uuid.UUID `db:"id"           json:"id"`
-	Code        string    `db:"code"         json:"code"`
-	ShopName    string    `db:"shop_name"    json:"shopName"`
-	Status      Status    `db:"status"       json:"status"`
-	Address     string    `db:"address"      json:"address"`
-	City        string    `db:"city"         json:"city"`
-	Province    string    `db:"province"     json:"province"`
-	PostalCode  string    `db:"postal_code"  json:"postalCode"`
-	ContactName string    `db:"contact_name" json:"contactName"`
-	Phone       string    `db:"phone"        json:"phone"`
-	Email       string    `db:"email"        json:"email"`
-	CreatedAt   time.Time `db:"created_at"   json:"createdAt"`
-	UpdatedAt   time.Time `db:"updated_at"   json:"updatedAt"`
+	ID          uuid.UUID `json:"id"`
+	Code        string    `json:"code"`
+	ShopName    string    `json:"shopName"`
+	Status      Status    `json:"status"`
+	Address     string    `json:"address"`
+	City        string    `json:"city"`
+	Province    string    `json:"province"`
+	PostalCode  string    `json:"postalCode"`
+	ContactName string    `json:"contactName"`
+	Phone       string    `json:"phone"`
+	Email       string    `json:"email"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }

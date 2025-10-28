@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/shop"
+	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -31,13 +32,22 @@ func (s *Server) RegisterRoutes(db *pgxpool.Pool) http.Handler {
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-
+	// --- Shop route group ---
 	repo := shop.NewShopRepository(db)
 	svc := shop.NewService(repo)
 	h := shop.NewHandler(svc)
 
 	router.Route("/shops", func(sub chi.Router) {
 		h.RegisterRoutes(sub)
+	})
+
+	// --- WorkOrder route group ---
+	workorderRepo := workorder.NewRepository(db)
+	workorderSvc := workorder.NewService(workorderRepo)
+	workorderHandler := workorder.NewHandler(workorderSvc)
+
+	router.Route("/workorders", func(sub chi.Router) {
+		workorderHandler.RegisterRoutes(sub)
 	})
 
 	return router

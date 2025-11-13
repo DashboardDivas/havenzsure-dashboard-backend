@@ -1,6 +1,6 @@
 package dto
 
-type InsuranceInfo struct {
+type Insurance struct {
 	InsuranceCompany string `json:"insurance_company"`
 	AgentFirstName   string `json:"agent_first_name"`
 	AgentLastName    string `json:"agent_last_name"`

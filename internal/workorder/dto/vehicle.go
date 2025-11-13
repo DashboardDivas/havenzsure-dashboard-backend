@@ -1,13 +1,5 @@
 package dto
 
-// &detail.Vehicle.PlateNo,
-// &detail.Vehicle.Make,
-// &detail.Vehicle.Model,
-// &detail.Vehicle.BodyStyle,
-// &detail.Vehicle.ModelYear,
-// &detail.Vehicle.VIN,
-// &detail.Vehicle.Color,
-
 type Vehicle struct {
 	PlateNo   string `json:"plateNo"`
 	Make      string `json:"make"`

@@ -8,7 +8,7 @@ import (
 
 // Customer ↔ app.customers
 type Customer struct {
-	CustomerID uuid.UUID `db:"customer_id"`
+	CustomerID uuid.UUID `db:"id"`
 	FirstName  string    `db:"first_name"`
 	LastName   string    `db:"last_name"`
 	Address    string    `db:"address"`
@@ -23,7 +23,7 @@ type Customer struct {
 
 // Vehicle ↔ app.vehicles
 type Vehicle struct {
-	VehicleID uuid.UUID `db:"vehicle_id"`
+	VehicleID uuid.UUID `db:"id"`
 	Make      string    `db:"make"`
 	Model     string    `db:"model"`
 	BodyStyle string    `db:"body_style"`
@@ -35,7 +35,8 @@ type Vehicle struct {
 	UpdatedAt time.Time `db:"updated_at"`
 }
 
-type InsuranceInfo struct {
+type Insurance struct {
+	InsuranceID      uuid.UUID `db:"id"`
 	WorkOrderID      uuid.UUID `db:"work_order_id"`
 	InsuranceCompany string    `db:"insurance_company"`
 	AgentFirstName   string    `db:"agent_first_name"`
@@ -47,8 +48,8 @@ type InsuranceInfo struct {
 
 // WorkOrder represents one row from app.work_orders
 type WorkOrder struct {
-	ID              uuid.UUID  `db:"work_order_id"`
-	Code            string     `db:"work_order_code"`
+	ID              uuid.UUID  `db:"id"`
+	Code            string     `db:"code"`
 	CustomerID      uuid.UUID  `db:"customer_id"`
 	ShopID          uuid.UUID  `db:"shop_id"`
 	VehicleID       uuid.UUID  `db:"vehicle_id"`

@@ -11,5 +11,5 @@ type WorkOrderDetail struct {
 	DateUpdated  time.Time       `json:"date_updated"`
 	Customer     Customer        `json:"customer"`
 	Vehicle      Vehicle         `json:"vehicle"`
-	// InsuranceInfo *InsuranceInfo  `json:"insurance_info,omitempty"`
+	Insurance    *Insurance      `json:"insurance,omitempty"`
 }

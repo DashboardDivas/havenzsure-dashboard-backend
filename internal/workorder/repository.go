@@ -2,6 +2,7 @@ package workorder
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,7 +24,7 @@ func NewRepository(db *pgxpool.Pool) Repository {
 func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) {
 	rows, err := r.db.Query(ctx, `
 	SELECT 
-		wo.work_order_code,
+		wo.code,
 		wo.status,
 		wo.created_at,
 		wo.updated_at,
@@ -32,7 +33,7 @@ func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) 
 		c.email
 	FROM app.work_orders AS wo
 	JOIN app.customers AS c
-		ON wo.customer_id = c.customer_id
+		ON wo.customer_id = c.id
 	ORDER BY wo.created_at DESC
 	`)
 	if err != nil {
@@ -64,7 +65,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 	var detail dto.WorkOrderDetail
 	row := r.db.QueryRow(ctx, `
 		SELECT
-			wo.work_order_code,
+			wo.code,
 			wo.status,
 			wo.created_at AS date_received,
 			wo.updated_at AS date_updated,
@@ -84,13 +85,30 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 			v.body_style,
 			v.model_year,
 			v.vin,
-			v.color
+			v.color,
+
+			i.insurance_company,
+			i.agent_first_name,
+			i.agent_last_name,
+			i.agent_phone,
+			i.policy_number,
+			i.claim_number
 
 		FROM app.work_orders wo
-		JOIN app.customers c ON wo.customer_id = c.customer_id
-		JOIN app.vehicles  v ON wo.vehicle_id  = v.vehicle_id
-		WHERE wo.work_order_code = $1
+		JOIN app.customers c ON wo.customer_id = c.id
+		JOIN app.vehicles  v ON wo.vehicle_id  = v.id
+		LEFT JOIN app.insurance i ON wo.id = i.work_order_id
+		WHERE wo.code = $1
 	`, code)
+
+	var (
+		insCompany     sql.NullString
+		agentFirstName sql.NullString
+		agentLastName  sql.NullString
+		agentPhone     sql.NullString
+		policyNumber   sql.NullString
+		claimNumber    sql.NullString
+	)
 
 	err := row.Scan(
 		&detail.Code,
@@ -115,15 +133,31 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 		&detail.Vehicle.VIN,
 		&detail.Vehicle.Color,
 
-		// &detail.InsuranceInfo.InsuranceCompany,
-		// &detail.InsuranceInfo.AgentFirstName,
-		// &detail.InsuranceInfo.AgentLastName,
-		// &detail.InsuranceInfo.AgentPhone,
-		// &detail.InsuranceInfo.PolicyNumber,
-		// &detail.InsuranceInfo.ClaimNumber,
+		&insCompany,
+		&agentFirstName,
+		&agentLastName,
+		&agentPhone,
+		&policyNumber,
+		&claimNumber,
 	)
 	if err != nil {
 		return detail, err
+	}
+
+	// if any of the insurance fields is not null, set insurance info as non-nil
+	if insCompany.Valid || agentFirstName.Valid || agentLastName.Valid ||
+		agentPhone.Valid || policyNumber.Valid || claimNumber.Valid {
+
+		detail.Insurance = &dto.Insurance{
+			InsuranceCompany: insCompany.String,
+			AgentFirstName:   agentFirstName.String,
+			AgentLastName:    agentLastName.String,
+			AgentPhone:       agentPhone.String,
+			PolicyNumber:     policyNumber.String,
+			ClaimNumber:      claimNumber.String,
+		}
+	} else {
+		detail.Insurance = nil
 	}
 	return detail, nil
 }

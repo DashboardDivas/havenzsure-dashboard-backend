@@ -1,8 +1,7 @@
 package dto
 
 type Customer struct {
-	FirstName  string `json:"firstName"`
-	LastName   string `json:"lastName"`
+	FullName   string `json:"fullName"`
 	Address    string `json:"address"`
 	City       string `json:"city"`
 	PostalCode string `json:"postalCode"`

@@ -11,7 +11,6 @@ type WorkOrderListItem struct {
 	UpdatedAt time.Time       `json:"updatedAt"`
 
 	// Joined from customers
-	CustomerFirstName string `json:"customerFirstName"`
-	CustomerLastName  string `json:"customerLastName"`
-	CustomerEmail     string `json:"customerEmail"`
+	CustomerFullName string `json:"customerFullName"`
+	CustomerEmail    string `json:"customerEmail"`
 }

@@ -28,8 +28,7 @@ func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) 
 		wo.status,
 		wo.created_at,
 		wo.updated_at,
-		c.first_name,
-		c.last_name,
+		c.first_name || ' ' || c.last_name AS full_name,
 		c.email
 	FROM app.work_orders AS wo
 	JOIN app.customers AS c
@@ -49,8 +48,7 @@ func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) 
 			&wl.Status,
 			&wl.CreatedAt,
 			&wl.UpdatedAt,
-			&wl.CustomerFirstName,
-			&wl.CustomerLastName,
+			&wl.CustomerFullName,
 			&wl.CustomerEmail,
 		)
 		if err != nil {
@@ -70,8 +68,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 			wo.created_at AS date_received,
 			wo.updated_at AS date_updated,
 
-			c.first_name,
-			c.last_name,
+			c.first_name || ' ' || c.last_name AS full_name,
 			c.phone,
 			c.email,
 			c.address,
@@ -88,8 +85,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 			v.color,
 
 			i.insurance_company,
-			i.agent_first_name,
-			i.agent_last_name,
+			i.agent_first_name || ' ' || i.agent_last_name AS agent_full_name,
 			i.agent_phone,
 			i.policy_number,
 			i.claim_number
@@ -102,12 +98,11 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 	`, code)
 
 	var (
-		insCompany     sql.NullString
-		agentFirstName sql.NullString
-		agentLastName  sql.NullString
-		agentPhone     sql.NullString
-		policyNumber   sql.NullString
-		claimNumber    sql.NullString
+		insCompany    sql.NullString
+		agentFullName sql.NullString
+		agentPhone    sql.NullString
+		policyNumber  sql.NullString
+		claimNumber   sql.NullString
 	)
 
 	err := row.Scan(
@@ -116,8 +111,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 		&detail.DateReceived,
 		&detail.DateUpdated,
 
-		&detail.Customer.FirstName,
-		&detail.Customer.LastName,
+		&detail.Customer.FullName,
 		&detail.Customer.Phone,
 		&detail.Customer.Email,
 		&detail.Customer.Address,
@@ -134,8 +128,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 		&detail.Vehicle.Color,
 
 		&insCompany,
-		&agentFirstName,
-		&agentLastName,
+		&agentFullName,
 		&agentPhone,
 		&policyNumber,
 		&claimNumber,
@@ -145,13 +138,12 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 	}
 
 	// if any of the insurance fields is not null, set insurance info as non-nil
-	if insCompany.Valid || agentFirstName.Valid || agentLastName.Valid ||
+	if insCompany.Valid || agentFullName.Valid ||
 		agentPhone.Valid || policyNumber.Valid || claimNumber.Valid {
 
 		detail.Insurance = &dto.Insurance{
 			InsuranceCompany: insCompany.String,
-			AgentFirstName:   agentFirstName.String,
-			AgentLastName:    agentLastName.String,
+			AgentFullName:    agentFullName.String,
 			AgentPhone:       agentPhone.String,
 			PolicyNumber:     policyNumber.String,
 			ClaimNumber:      claimNumber.String,

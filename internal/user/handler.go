@@ -45,7 +45,7 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, user)
+	writeJSON(w, http.StatusCreated, user.ToResponse())
 }
 
 func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
@@ -62,7 +62,7 @@ func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, user.ToResponse())
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +81,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, users)
+	response := make([]*UserResponse, len(users))
+	for i, u := range users {
+		response[i] = u.ToResponse()
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +109,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, user.ToResponse())
 }
 
 func (h *Handler) deactivate(w http.ResponseWriter, r *http.Request) {

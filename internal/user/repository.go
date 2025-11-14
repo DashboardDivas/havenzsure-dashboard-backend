@@ -24,6 +24,8 @@ type Repository interface {
 	Reactivate(ctx context.Context, id uuid.UUID) error
 	IncrementTokenVersion(ctx context.Context, id uuid.UUID) error
 	TouchLastSignInNowByExternalID(ctx context.Context, externalID string) error
+	GetRoleIDByCode(ctx context.Context, code string) (uuid.UUID, error)
+	GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error)
 }
 
 type pgRepo struct {
@@ -62,10 +64,14 @@ type userRow struct {
 	RoleIsSystem *bool      `db:"role_is_system"`
 	RoleCreated  *time.Time `db:"role_created_at"`
 	RoleUpdated  *time.Time `db:"role_updated_at"`
+
+	// Shop join fields
+	ShopCode *string `db:"shop_code"`
+	ShopName *string `db:"shop_name"`
 }
 
 func (r userRow) toDomain() *User {
-	return &User{
+	user := &User{
 		ID:            r.ID,
 		Code:          r.Code,
 		Email:         r.Email,
@@ -80,6 +86,7 @@ func (r userRow) toDomain() *User {
 		DeactivatedBy: r.DeactivatedBy,
 		TokenVersion:  r.TokenVersion,
 		ShopID:        r.ShopID,
+		RoleID:        r.RoleID,
 		CreatedAt:     r.CreatedAt,
 		UpdatedAt:     r.UpdatedAt,
 		LastSignInAt:  r.LastSignInAt,
@@ -91,6 +98,13 @@ func (r userRow) toDomain() *User {
 			UpdatedAt: *r.RoleUpdated,
 		},
 	}
+	if r.ShopCode != nil && r.ShopName != nil {
+		user.Shop = &Shop{
+			Code: *r.ShopCode,
+			Name: *r.ShopName,
+		}
+	}
+	return user
 }
 
 /* ---------- error mapping ---------- */
@@ -125,9 +139,12 @@ SELECT
   r.name        AS role_name,
   r.is_system   AS role_is_system,
   r.created_at  AS role_created_at,
-  r.updated_at  AS role_updated_at
+  r.updated_at  AS role_updated_at,
+  s.code        AS shop_code,
+  s.name        AS shop_name
 FROM app.users u
 INNER JOIN app.roles r ON r.id = u.role_id
+LEFT JOIN app.shop s ON s.id = u.shop_id
 `
 
 /* ---------- queries ---------- */
@@ -310,4 +327,24 @@ func (r *pgRepo) TouchLastSignInNowByExternalID(ctx context.Context, externalID 
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *pgRepo) GetRoleIDByCode(ctx context.Context, code string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx,
+		"SELECT id FROM app.roles WHERE code = $1", code).Scan(&id)
+	if err != nil {
+		return uuid.Nil, mapPgError(err)
+	}
+	return id, nil
+}
+
+func (r *pgRepo) GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx,
+		"SELECT id FROM app.shop WHERE code = $1", code).Scan(&id)
+	if err != nil {
+		return uuid.Nil, mapPgError(err)
+	}
+	return id, nil
 }

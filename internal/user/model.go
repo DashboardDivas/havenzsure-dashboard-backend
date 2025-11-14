@@ -15,51 +15,105 @@ type Role struct {
 	UpdatedAt time.Time `json:"-"` // backend-only
 }
 
-// User represents a system user
+// Shop represents a shop
+type Shop struct {
+	Code string `json:"code"`
+	Name string `json:"name"`
+}
+
+// User represents a system user for internal use
 type User struct {
-	ID            uuid.UUID  `json:"id"`
-	Code          string     `json:"code"`
-	Email         string     `json:"email"`
-	FirstName     string     `json:"firstName"`
-	LastName      string     `json:"lastName"`
-	Phone         *string    `json:"phone,omitempty"`
-	ImageURL      *string    `json:"imageUrl,omitempty"`
-	ExternalID    string     `json:"-"` // GCIP UID (immutable, backend-only)
-	EmailVerified bool       `json:"emailVerified"`
-	IsActive      bool       `json:"isActive"`
-	DeactivatedAt *time.Time `json:"deactivatedAt,omitempty"`
-	DeactivatedBy *uuid.UUID `json:"deactivatedBy,omitempty"`
-	TokenVersion  int        `json:"-"` // backend-only (force logout mechanism)
-	ShopID        *uuid.UUID `json:"shopId,omitempty"`
-	CreatedAt     time.Time  `json:"createdAt"`
-	UpdatedAt     time.Time  `json:"updatedAt"`
-	LastSignInAt  *time.Time `json:"lastSignInAt,omitempty"`
+	ID            uuid.UUID  `json:"-"`
+	Code          string     `json:"-"`
+	Email         string     `json:"-"`
+	FirstName     string     `json:"-"`
+	LastName      string     `json:"-"`
+	Phone         *string    `json:"-"`
+	ImageURL      *string    `json:"-"`
+	ExternalID    string     `json:"-"` // GCIP UID (immutable)
+	EmailVerified bool       `json:"-"`
+	IsActive      bool       `json:"-"`
+	DeactivatedAt *time.Time `json:"-"`
+	DeactivatedBy *uuid.UUID `json:"-"`
+	TokenVersion  int        `json:"-"`
+	ShopID        *uuid.UUID `json:"-"`
+	RoleID        uuid.UUID  `json:"-"`
+	CreatedAt     time.Time  `json:"-"`
+	UpdatedAt     time.Time  `json:"-"`
+	LastSignInAt  *time.Time `json:"-"`
 
 	// Role - each user must have exactly ONE role (enforced by role_id NOT NULL)
-	Role Role `json:"role"`
+	Role Role `json:"-"`
+
+	// Shop - optional shop assignment
+	Shop *Shop `json:"-"`
 }
 
 // CreateUserInput represents the input data required to create a new user
 type CreateUserInput struct {
-	Email         string     `json:"email"`
-	FirstName     string     `json:"firstName"`
-	LastName      string     `json:"lastName"`
-	Phone         *string    `json:"phone,omitempty"`
-	ImageURL      *string    `json:"imageUrl,omitempty"`
-	ExternalID    string     `json:"externalId"` // required from GCIP
-	EmailVerified bool       `json:"emailVerified"`
-	ShopID        *uuid.UUID `json:"shopId,omitempty"`
-	RoleID        uuid.UUID  `json:"roleId"`
+	Email         string  `json:"email"`
+	FirstName     string  `json:"firstName"`
+	LastName      string  `json:"lastName"`
+	Phone         *string `json:"phone,omitempty"`
+	ImageURL      *string `json:"imageUrl,omitempty"`
+	ExternalID    string  `json:"externalId"` // required from GCIP
+	EmailVerified bool    `json:"emailVerified"`
+	ShopCode      *string `json:"shopCode,omitempty"` // Frontend passes shop code
+	RoleCode      string  `json:"roleCode"`           // Frontend passes role code
+
+	// Internal fields (populated by service, not exposed in JSON)
+	ShopID *uuid.UUID `json:"-"`
+	RoleID uuid.UUID  `json:"-"`
 }
 
 // UpdateUserInput represents the fields that can be updated for a user
 type UpdateUserInput struct {
-	FirstName     *string    `json:"firstName,omitempty"`
-	LastName      *string    `json:"lastName,omitempty"`
-	Phone         *string    `json:"phone,omitempty"`
-	ImageURL      *string    `json:"imageUrl,omitempty"`
-	EmailVerified *bool      `json:"emailVerified,omitempty"`
-	ShopID        *uuid.UUID `json:"shopId,omitempty"`
-	RoleID        *uuid.UUID `json:"roleId,omitempty"`
+	FirstName     *string `json:"firstName,omitempty"`
+	LastName      *string `json:"lastName,omitempty"`
+	Phone         *string `json:"phone,omitempty"`
+	ImageURL      *string `json:"imageUrl,omitempty"`
+	EmailVerified *bool   `json:"emailVerified,omitempty"`
+	ShopCode      *string `json:"shopCode,omitempty"` // Frontend passes shop code
+	RoleCode      *string `json:"roleCode,omitempty"` // Frontend passes role code
+
+	// Internal fields (populated by service, not exposed in JSON)
+	ShopID *uuid.UUID `json:"-"`
+	RoleID *uuid.UUID `json:"-"`
 	// IsActive cannot be updated here; use ActivateUser / DeactivateUser methods
+}
+
+// UserResponse represents the user data sent to the frontend
+type UserResponse struct {
+	ID            uuid.UUID `json:"id"`
+	Code          string    `json:"code"`
+	Email         string    `json:"email"`
+	FirstName     string    `json:"firstName"`
+	LastName      string    `json:"lastName"`
+	Phone         *string   `json:"phone,omitempty"`
+	ImageURL      *string   `json:"imageUrl,omitempty"`
+	EmailVerified bool      `json:"emailVerified"`
+	IsActive      bool      `json:"isActive"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	Role          Role      `json:"role"`
+	Shop          *Shop     `json:"shop,omitempty"`
+}
+
+// ToResponse converts User (internal) to UserResponse (for API)
+func (u *User) ToResponse() *UserResponse {
+	return &UserResponse{
+		ID:            u.ID,
+		Code:          u.Code,
+		Email:         u.Email,
+		FirstName:     u.FirstName,
+		LastName:      u.LastName,
+		Phone:         u.Phone,
+		ImageURL:      u.ImageURL,
+		EmailVerified: u.EmailVerified,
+		IsActive:      u.IsActive,
+		CreatedAt:     u.CreatedAt,
+		UpdatedAt:     u.UpdatedAt,
+		Role:          u.Role,
+		Shop:          u.Shop,
+	}
 }

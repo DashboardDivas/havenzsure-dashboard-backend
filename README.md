@@ -1,128 +1,45 @@
-# Database Setup Guide
+ROLE PERMISSIONS MATRIX
+=============================
 
-This guide explains how to start the local Postgres container, create roles and the project database, run migrations for the schema, and verify the setup.
+**Legend**  
+- **V** = view  
+- **E** = edit (non-critical fields: notes, photos, labor/material lines)  
+- **T** = transition (change state)  
+- **\*** = with constraints (see notes)
 
----
 
-## 1. Start Postgres with Docker Compose
+### Role Permission Table
 
-From the project root, run:
-
-```bash
-docker compose up -d
-```
-
-This starts a Postgres container (`havenzsure-postgres`).
-
-Confirm it’s running:
-
-```bash
-docker ps
-```
-
-You should see something like:
-
-```
-0.0.0.0:5433->5432/tcp
-```
-
----
-
-## 2. Connect with pgAdmin (superuser)
-
-1. Open **pgAdmin**
-2. Right-click **Servers → Register → Server**
-3. Fill in the details:
-
-```
-Name: Local Container
-Host: <DB_HOST>
-Port: <DB_PORT>
-Maintenance DB: <POSTGRES_DB>
-Username: <POSTGRES_USER>
-Password: <POSTGRES_PASSWORD>
-```
-
-At this point the **database server is already running** inside the container. You are now connected as the `postgres` superuser.
+| RESOURCE / ACTION                  | ADMIN          | ADJUSTER               | BODYMAN                 |
+|-----------------------------------|----------------|-------------------------|--------------------------|
+| Work order visibility (all)       | V (all)        | V (read-only)\*         | V (read-only)\*          |
+| "My Assignments" visibility       | V              | V (if assigned)\*       | V (if assigned)          |
+| Create intake (draft/WO)          | Yes            | Yes                     | Yes                      |
+| Edit intake/basic info            | Yes            | Suggest via note         | Suggest via note          |
+| Upload photos/docs                | Yes            | Yes                     | Yes                      |
+| Set/Change assignee               | Yes            | No                      | No                       |
+| Edit estimate lines (manual)      | Yes            | Suggest via note         | Yes (if assigned)         |
+| Trigger AI estimate               | Yes            | View/Request            | Yes (if assigned)         |
+| Send estimate to customer/insurer | Yes            | Suggest via note         | Suggest via note          |
+| Set awaiting_party/reason         | Yes            | Yes                     | Yes (if assigned)         |
+| Transition → **awaiting_info**    | Yes            | Suggest via note         | Yes (if assigned)\*       |
+| Transition → **in_progress**      | Yes            | No                      | No                       |
+| Transition → **insurance_denied** | Yes            | No                      | No                       |
+| Transition → **completed**        | Yes            | No                      | No                       |
+| Transition → **require_follow_up**| Yes            | Yes                     | Yes (if assigned)         |
+| Switch to self-pay                | Yes            | Suggest via note         | Suggest via note          |
+| Mark payment status               | Yes            | View                    | Suggest via note          |
+| Parts status update               | Yes            | View                    | Yes (if assigned)         |
+| Lock core fields on completed     | Yes            | No                      | No                       |
+| Audit timeline view               | Yes            | Yes                     | Yes                      |
 
 ---
 
-## 3. Create Roles and Database
+### Notes
 
-With the superuser connection open (database = `postgres`), open **Query Tool** and run:
+- **Adjuster**: Positioned as a collaborator who provides documentation retrieval and damage assessment suggestions. They may initiate `request_more_info` and populate `awaiting_party` / `awaiting_reason`, but **cannot** push a work order into **in_progress** or **completed**.
+  
+- **Bodyman**: For assigned work orders, a bodyman may upload/edit labor & materials, trigger AI, and propose supplementary assessments. They may move a work order into **awaiting_info** (e.g., submitting estimate/materials), but **key business transitions** (in_progress, completed, insurance_denied) are performed by **Admin**.
 
-```sql
-CREATE ROLE app_owner LOGIN PASSWORD '<DB_OWNER_PASSWORD>';
-CREATE ROLE app_user  LOGIN PASSWORD '<DB_APP_PASSWORD>';
-CREATE DATABASE havenzsure OWNER app_owner;
-```
+- **Read-only visibility**: Same-shop team members can see work orders without overstepping permissions; this improves support and handoff.
 
-> Replace `<owner_password>` and `<user_password>` with secure values.
-
----
-
-## 4. Run Migrations (Schema Changes)
-
-Install migration tool Goose
-
-```go
-go install github.com/pressly/goose/v3/cmd/goose@latest
-```
-
-Apply migrations with Goose:
-
-```bash
-goose -dir ./migrations postgres "host=<DB_HOST> port=<DB_PORT> user=<DB_OWNER_USER> password=<DB_OWNER_PASSWORD> dbname=<DB_NAME> sslmode=disable" up
-```
-
-This will create tables and other objects defined in migrations folder.
-
----
-
-## 5. Verify with PgAdmin
-
-Connect again in pgAdmin, this time as `app_owner`:
-
-```
-Name: Havenzsure-AppOwner
-Host: <DB_HOST>
-Port: <DB_PORT>
-Maintenance DB: <DB_NAME>
-Username: <DB_OWNER_USER>
-Password: <DB_OWNER_PASSWORD>
-```
-
-Expand the database tree — you should see the `app` schema in the havanzsure db.
-
-Check search path:
-
-```sql
-SHOW search_path;
-```
-
-Expected result:
-
-```
-app, public
-```
-
----
-
-## Summary
-
-- **Run container** → `docker compose up -d`
-- **Create roles & DB** → simple SQL (once, with placeholders for passwords)
-- **Run migrations** → Goose manages schema changes
-- **Verify with PgAdmin** → confirm `app` schema
-
----
-
-## Resetting the Database (if needed)
-
-```bash
-docker compose down -v
-docker compose up -d
-# Recreate roles & database manually (step 3)
-# Then reapply schema migrations
-goose -dir ./migrations postgres "host=<DB_HOST> port=<DB_PORT> user=<DB_OWNER_USER> password=<DB_OWNER_PASSWORD> dbname=<DB_NAME> sslmode=disable" up
-```

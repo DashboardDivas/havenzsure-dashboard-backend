@@ -1,128 +1,306 @@
 # Database Setup Guide
 
-This guide explains how to start the local Postgres container, create roles and the project database, run migrations for the schema, and verify the setup.
+This guide explains how to set up local Postgres containers for both development and testing, create roles and databases, run migrations, and verify the setup.
 
 ---
 
-## 1. Start Postgres with Docker Compose
+## Quick Start (Recommended)
 
-From the project root, run:
+```bash
+# 1. Start both containers
+docker compose up -d
+docker compose -f compose.test.yml up -d
+
+# 2. Setup and migrate both databases
+bash scripts/setup-db.sh dev && bash scripts/migrate.sh
+bash scripts/setup-db.sh test && bash scripts/migrate.sh test
+```
+
+Done! Your databases are ready. ✓
+
+---
+
+## Development Database Setup
+
+### 1. Start Container
 
 ```bash
 docker compose up -d
 ```
 
-This starts a Postgres container (`havenzsure-postgres`).
-
-Confirm it’s running:
+Verify it's running:
 
 ```bash
-docker ps
+docker ps | grep havenzsure-postgres
 ```
 
-You should see something like:
+### 2. Create Roles and Database
 
-```
-0.0.0.0:5433->5432/tcp
-```
-
----
-
-## 2. Connect with pgAdmin (superuser)
-
-1. Open **pgAdmin**
-2. Right-click **Servers → Register → Server**
-3. Fill in the details:
-
-```
-Name: Local Container
-Host: <DB_HOST>
-Port: <DB_PORT>
-Maintenance DB: <POSTGRES_DB>
-Username: <POSTGRES_USER>
-Password: <POSTGRES_PASSWORD>
-```
-
-At this point the **database server is already running** inside the container. You are now connected as the `postgres` superuser.
-
----
-
-## 3. Create Roles and Database
-
-With the superuser connection open (database = `postgres`), open **Query Tool** and run:
-
-```sql
-CREATE ROLE app_owner LOGIN PASSWORD '<DB_OWNER_PASSWORD>';
-CREATE ROLE app_user  LOGIN PASSWORD '<DB_APP_PASSWORD>';
-CREATE DATABASE havenzsure OWNER app_owner;
-```
-
-> Replace `<owner_password>` and `<user_password>` with secure values.
-
----
-
-## 4. Run Migrations (Schema Changes)
-
-Install migration tool Goose
-
-```go
-go install github.com/pressly/goose/v3/cmd/goose@latest
-```
-
-Apply migrations with Goose:
+**Using automated script (Recommended):**
 
 ```bash
-goose -dir ./migrations postgres "host=<DB_HOST> port=<DB_PORT> user=<DB_OWNER_USER> password=<DB_OWNER_PASSWORD> dbname=<DB_NAME> sslmode=disable" up
+bash scripts/setup-db.sh dev
 ```
 
-This will create tables and other objects defined in migrations folder.
+**Or manually via pgAdmin:**
 
----
+1. Connect as superuser (`postgres`)
+2. Run in Query Tool:
+   ```sql
+   CREATE ROLE <DB_OWNER_USER> LOGIN PASSWORD '<DB_OWNER_PASSWORD>';
+   CREATE ROLE <DB_APP_USER>  LOGIN PASSWORD '<DB_APP_PASSWORD>';
+   CREATE DATABASE <DB_NAME> OWNER <DB_OWNER_USER>;
+   ```
 
-## 5. Verify with PgAdmin
+### 3. Run Migrations
 
-Connect again in pgAdmin, this time as `app_owner`:
+```bash
+bash scripts/migrate.sh
+```
+
+### 4. Verify with pgAdmin
+
+Connect as `<DB_OWNER_USER>` in pgAdmin:
 
 ```
 Name: Havenzsure-AppOwner
 Host: <DB_HOST>
 Port: <DB_PORT>
-Maintenance DB: <DB_NAME>
+Database: <DB_NAME>
 Username: <DB_OWNER_USER>
 Password: <DB_OWNER_PASSWORD>
 ```
 
-Expand the database tree — you should see the `app` schema in the havanzsure db.
-
-Check search path:
+Check schema exists:
 
 ```sql
 SHOW search_path;
-```
-
-Expected result:
-
-```
-app, public
+-- Expected: <DB_SCHEMA>, public
 ```
 
 ---
 
-## Summary
+## Test Database Setup
 
-- **Run container** → `docker compose up -d`
-- **Create roles & DB** → simple SQL (once, with placeholders for passwords)
-- **Run migrations** → Goose manages schema changes
-- **Verify with PgAdmin** → confirm `app` schema
+The test database is isolated and runs on a separate port (5434 by default).
+
+### 1. Start Container
+
+```bash
+docker compose -f compose.test.yml up -d
+```
+
+Verify it's running:
+
+```bash
+docker ps | grep havenzsure-postgres-test
+```
+
+### 2. Create Roles and Database
+
+```bash
+bash scripts/setup-db.sh test
+```
+
+### 3. Run Migrations
+
+```bash
+bash scripts/migrate.sh test
+```
 
 ---
 
-## Resetting the Database (if needed)
+## Application Connection
+
+The application and all tests connect using `<DB_APP_USER>` to enforce the principle of least privilege:
+
+- **Development & Testing**: Application code uses `<DB_APP_USER>` (limited permissions)
+- **Migrations**: Only migrations use `<DB_OWNER_USER>` (schema changes)
+- **Production**: Only `<DB_APP_USER>` credentials are used
+
+This ensures the application works correctly with production-level permissions.
+
+---
+
+## Running Migrations After Schema Changes
+
+When new migrations are added to the repository:
+
+```bash
+# Development database
+bash scripts/migrate.sh
+
+# Test database
+bash scripts/migrate.sh test
+```
+
+---
+
+## Verification
+
+### Quick Verification - Development Database
+
+Check development database is set up correctly:
+
+```bash
+# Check roles exist in development
+docker exec -e PGPASSWORD="<POSTGRES_PASSWORD>" havenzsure-postgres psql -U <POSTGRES_USER> -d postgres -c "\du"
+
+# Check tables were created
+docker exec -e PGPASSWORD="<DB_OWNER_PASSWORD>" havenzsure-postgres psql -U <DB_OWNER_USER> -d <DB_NAME> -c "\dt <DB_SCHEMA>.*"
+
+# Verify app_user can read tables
+docker exec -e PGPASSWORD="<DB_APP_PASSWORD>" havenzsure-postgres psql -U <DB_APP_USER> -d <DB_NAME> -c "SELECT COUNT(*) FROM <DB_SCHEMA>.shop;"
+```
+
+### Quick Verification - Test Database
+
+Check test database is set up correctly:
+
+```bash
+# Check tables were created in test database
+docker exec -e PGPASSWORD="<DB_OWNER_PASSWORD>" havenzsure-postgres-test psql -U <DB_OWNER_USER> -d <DB_NAME> -c "\dt <DB_SCHEMA>.*"
+
+# Verify app_user can read tables (for integration tests)
+docker exec -e PGPASSWORD="<DB_APP_PASSWORD>" havenzsure-postgres-test psql -U <DB_APP_USER> -d <DB_NAME> -c "SELECT COUNT(*) FROM <DB_SCHEMA>.shop;"
+```
+
+### Verify Database Owner
+
+```bash
+# Development
+docker exec -e PGPASSWORD="<POSTGRES_PASSWORD>" havenzsure-postgres psql -U <POSTGRES_USER> -d postgres -c "\l <DB_NAME>"
+
+# Test
+docker exec -e PGPASSWORD="<POSTGRES_PASSWORD>" havenzsure-postgres-test psql -U <POSTGRES_USER> -d postgres -c "\l <DB_NAME>"
+```
+
+Both should show `<DB_OWNER_USER>` as the owner.
+
+---
+
+## Resetting Databases
+
+### Reset Development Database
 
 ```bash
 docker compose down -v
 docker compose up -d
-# Recreate roles & database manually (step 3)
-# Then reapply schema migrations
-goose -dir ./migrations postgres "host=<DB_HOST> port=<DB_PORT> user=<DB_OWNER_USER> password=<DB_OWNER_PASSWORD> dbname=<DB_NAME> sslmode=disable" up
+bash scripts/setup-db.sh dev
+bash scripts/migrate.sh
 ```
+
+### Reset Test Database
+
+```bash
+docker compose -f compose.test.yml down -v
+docker compose -f compose.test.yml up -d
+bash scripts/setup-db.sh test
+bash scripts/migrate.sh test
+```
+
+### Reset Development Database
+
+If you need to reset the development database (including volumes):
+
+```bash
+docker compose down -v
+docker compose up -d
+bash scripts/setup-db.sh dev
+bash scripts/migrate.sh
+```
+
+### Stop Test Database (Keep Development Running)
+
+If you want to stop only the test database:
+
+```bash
+docker compose -f compose.test.yml down -v
+```
+
+The development database will continue running.
+
+---
+
+## Environment Variables (.env)
+
+Required variables in `.env`:
+
+```env
+# PostgreSQL Superuser
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<superuser_password>
+POSTGRES_DB=postgres
+
+# Database
+DB_HOST=localhost
+DB_PORT=5433
+DB_TEST_PORT=5434
+DB_NAME=<database_name>
+DB_SCHEMA=<schema_name>
+
+# Database Roles
+DB_OWNER_USER=<owner_username>
+DB_OWNER_PASSWORD=<owner_password>
+DB_APP_USER=<app_username>
+DB_APP_PASSWORD=<app_password>
+
+# Containers (optional - defaults shown)
+DEV_CONTAINER_NAME=havenzsure-postgres
+TEST_CONTAINER_NAME=havenzsure-postgres-test
+```
+
+---
+
+## Troubleshooting
+
+### Container Not Running
+
+```bash
+# Check running containers
+docker ps | grep havenzsure
+
+# Start development container
+docker compose up -d
+
+# Start test container
+docker compose -f compose.test.yml up -d
+```
+
+### Setup Failed
+
+If `setup-db.sh` fails:
+
+1. Ensure container is running: `docker ps`
+2. Verify .env file exists and is correct: `cat .env`
+3. Check required variables: `grep -E "(DB_|POSTGRES_)" .env`
+4. Verify database doesn't already exist: `docker exec ... psql -l | grep <DB_NAME>`
+
+### Migration Failed
+
+If `migrate.sh` fails:
+
+1. Ensure database was created: `bash scripts/setup-db.sh [dev|test]`
+2. Check goose is installed: `goose --version`
+3. Verify connection to database: `docker exec -e PGPASSWORD="..." havenzsure-postgres psql -U <user> -d <db> -c "SELECT 1"`
+4. Check migration files exist: `ls -la migrations/`
+
+---
+
+## Command Reference
+
+| Task                     | Command                                                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Development Database** |                                                                                                                                                           |
+| Start dev DB             | `docker compose up -d`                                                                                                                                    |
+| Setup dev                | `bash scripts/setup-db.sh dev`                                                                                                                            |
+| Migrate dev              | `bash scripts/migrate.sh`                                                                                                                                 |
+| Reset dev                | `docker compose down -v && docker compose up -d && bash scripts/setup-db.sh dev && bash scripts/migrate.sh`                                               |
+| **Test Database**        |                                                                                                                                                           |
+| Start test DB            | `docker compose -f compose.test.yml up -d`                                                                                                                |
+| Setup test               | `bash scripts/setup-db.sh test`                                                                                                                           |
+| Migrate test             | `bash scripts/migrate.sh test`                                                                                                                            |
+| Stop test                | `docker compose -f compose.test.yml down -v`                                                                                                              |
+| Reset test               | `docker compose -f compose.test.yml down -v && docker compose -f compose.test.yml up -d && bash scripts/setup-db.sh test && bash scripts/migrate.sh test` |
+
+---

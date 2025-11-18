@@ -141,7 +141,7 @@ SELECT
   r.created_at  AS role_created_at,
   r.updated_at  AS role_updated_at,
   s.code        AS shop_code,
-  s.name        AS shop_name
+  s.shop_name        AS shop_name
 FROM app.users u
 INNER JOIN app.roles r ON r.id = u.role_id
 LEFT JOIN app.shop s ON s.id = u.shop_id

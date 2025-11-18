@@ -10,7 +10,16 @@ require (
 	github.com/joho/godotenv v1.5.1
 )
 
-require github.com/stretchr/testify v1.11.1 // indirect
+require github.com/kr/text v0.2.0 // indirect
+
+require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/stretchr/testify v1.11.1
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
 
 require (
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6

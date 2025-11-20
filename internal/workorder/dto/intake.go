@@ -9,6 +9,7 @@ type IntakePayload struct {
 	Customer  CustomerIntake   `json:"customer"`
 	Vehicle   VehicleIntake    `json:"vehicle"`
 	Insurance *InsuranceIntake `json:"insurance,omitempty"`
+	ShopCode  string           `json:"shopCode"`
 }
 type IntakeEditPayload struct {
 	Customer  *CustomerIntake  `json:"customer,omitempty"`
@@ -27,12 +28,12 @@ type CustomerIntake struct {
 	Phone      string `json:"phone"`
 }
 type InsuranceIntake struct {
-	InsuranceCompany string `json:"insurance_company"`
-	AgentFirstName   string `json:"agent_first_name"`
-	AgentLastName    string `json:"agent_last_name"`
-	AgentPhone       string `json:"agent_phone"`
-	PolicyNumber     string `json:"policy_number"`
-	ClaimNumber      string `json:"claim_number"`
+	InsuranceCompany string `json:"insuranceCompany"`
+	AgentFirstName   string `json:"agentFirstName"`
+	AgentLastName    string `json:"agentLastName"`
+	AgentPhone       string `json:"agentPhone"`
+	PolicyNumber     string `json:"policyNumber"`
+	ClaimNumber      string `json:"claimNumber"`
 }
 type VehicleIntake struct {
 	PlateNo   string `json:"plateNo"`

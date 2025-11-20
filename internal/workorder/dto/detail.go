@@ -7,8 +7,8 @@ import (
 type WorkOrderDetail struct {
 	Code         string           `json:"code"`
 	Status       WorkOrderStatus  `json:"status"`
-	DateReceived time.Time        `json:"date_received"`
-	DateUpdated  time.Time        `json:"date_updated"`
+	DateReceived time.Time        `json:"dateReceived"`
+	DateUpdated  time.Time        `json:"dateUpdated"`
 	Customer     CustomerDetail   `json:"customer"`
 	Vehicle      VehicleDetail    `json:"vehicle"`
 	Insurance    *InsuranceDetail `json:"insurance,omitempty"`
@@ -35,9 +35,9 @@ type VehicleDetail struct {
 }
 
 type InsuranceDetail struct {
-	InsuranceCompany string `json:"insurance_company"`
-	AgentFullName    string `json:"agent_full_name"`
-	AgentPhone       string `json:"agent_phone"`
-	PolicyNumber     string `json:"policy_number"`
-	ClaimNumber      string `json:"claim_number"`
+	InsuranceCompany string `json:"insuranceCompany"`
+	AgentFullName    string `json:"agentFullName"`
+	AgentPhone       string `json:"agentPhone"`
+	PolicyNumber     string `json:"policyNumber"`
+	ClaimNumber      string `json:"claimNumber"`
 }

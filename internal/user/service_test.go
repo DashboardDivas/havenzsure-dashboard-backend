@@ -103,6 +103,11 @@ func (m *MockRepository) GetShopIDByCode(ctx context.Context, code string) (uuid
 	return id, args.Error(1)
 }
 
+func (m *MockRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // ============================================================================
 // Validation Tests - Helper Functions
 // ============================================================================

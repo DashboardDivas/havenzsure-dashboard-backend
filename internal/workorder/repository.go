@@ -3,14 +3,19 @@ package workorder
 import (
 	"context"
 	"database/sql"
+	"fmt"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
-	List(ctx context.Context) ([]dto.WorkOrderListItem, error)
-	GetByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error)
+	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
+	GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error)
+	CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
+	//EditorIntake(ctx context.Context, code string, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 }
 
 type repository struct {
@@ -21,7 +26,7 @@ func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db}
 }
 
-func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) {
+func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error) {
 	rows, err := r.db.Query(ctx, `
 	SELECT 
 		wo.code,
@@ -59,7 +64,7 @@ func (r *repository) List(ctx context.Context) ([]dto.WorkOrderListItem, error) 
 	return result, rows.Err()
 }
 
-func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error) {
+func (r *repository) GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error) {
 	var detail dto.WorkOrderDetail
 	row := r.db.QueryRow(ctx, `
 		SELECT
@@ -141,7 +146,7 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 	if insCompany.Valid || agentFullName.Valid ||
 		agentPhone.Valid || policyNumber.Valid || claimNumber.Valid {
 
-		detail.Insurance = &dto.Insurance{
+		detail.Insurance = &dto.InsuranceDetail{
 			InsuranceCompany: insCompany.String,
 			AgentFullName:    agentFullName.String,
 			AgentPhone:       agentPhone.String,
@@ -152,4 +157,114 @@ func (r *repository) GetByCode(ctx context.Context, code string) (dto.WorkOrderD
 		detail.Insurance = nil
 	}
 	return detail, nil
+}
+
+func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return dto.WorkOrderDetail{}, err
+	}
+
+	defer tx.Rollback(ctx)
+
+	//define customerID to capture inserted customer ID
+	var customerID uuid.UUID
+	//Execute insert statement and capture the returned ID
+	//1. Insert customer and capture customer ID
+	err = tx.QueryRow(ctx, `
+		INSERT INTO app.customers
+		(first_name, last_name, address, city, postal_code, province, email, phone)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		RETURNING id
+		`, payload.Customer.FirstName, payload.Customer.LastName, payload.Customer.Address, payload.Customer.City, payload.Customer.PostalCode, payload.Customer.Province, payload.Customer.Email,
+		payload.Customer.Phone,
+	).Scan(&customerID)
+	if err != nil {
+		return dto.WorkOrderDetail{}, fmt.Errorf("insert customer: %w", err)
+	}
+	//2. Insert vehicle and capture vehicle ID
+	var vehicleID uuid.UUID
+	err = tx.QueryRow(ctx, `
+		INSERT INTO app.vehicles
+		(plate_number, make, model, body_style, model_year, vin, color)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id
+		`, payload.Vehicle.PlateNo, payload.Vehicle.Make, payload.Vehicle.Model, payload.Vehicle.BodyStyle, payload.Vehicle.ModelYear, payload.Vehicle.VIN,
+		payload.Vehicle.Color,
+	).Scan(&vehicleID)
+	if err != nil {
+		return dto.WorkOrderDetail{}, fmt.Errorf("insert vehicle: %w", err)
+	}
+
+	//3. Insert work order and capture work order ID and code
+
+	//shop id is hardcoded for now
+	var shopID uuid.UUID = uuid.MustParse("b155dd33-0253-48c2-86e9-08ad08c388e7")
+
+	var workOrderID uuid.UUID
+	var workOrderCode string
+	err = tx.QueryRow(ctx, `
+		INSERT INTO app.work_orders
+		(customer_id, vehicle_id, shop_id)
+		VALUES ($1, $2, $3)
+		RETURNING id, code
+		`, customerID,
+		vehicleID,
+		shopID,
+	).Scan(&workOrderID, &workOrderCode)
+	if err != nil {
+		return dto.WorkOrderDetail{}, fmt.Errorf("insert work_order: %w", err)
+	}
+	//4. Insert insurance if provided
+	ins := payload.Insurance
+	// Scenarios:
+	// 1) ins == nil               -> no insurance, skip
+	// 2) ins != nil && IsEmpty()  -> treat as no insurance, skip
+	// 3) ins != nil && !IsEmpty() but fail validation -> error
+	// 4) ins != nil && !IsEmpty() && pass validation -> upsert (insert now, update future)
+
+	if ins == nil {
+		// 1. ins == nil               -> no insurance, skip
+	} else if ins.IsEmpty() {
+		// 2. ins != nil && IsEmpty()  -> treat as no insurance, skip
+	} else {
+		// 3. ins != nil && !IsEmpty() but fail validation -> error
+		if err := ins.Validate(); err != nil {
+			return dto.WorkOrderDetail{}, fmt.Errorf("invalid insurance info: %w", err)
+		}
+
+		// 4. ins != nil && !IsEmpty() && pass validation -> upsert (insert now, update future)
+		if err := r.UpsertInsurance(ctx, tx, workOrderID, *ins); err != nil {
+			return dto.WorkOrderDetail{}, fmt.Errorf("failed to upsert insurance: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return dto.WorkOrderDetail{}, err
+	}
+	return r.GetWorkOrderByCode(ctx, workOrderCode)
+}
+
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func (r *repository) UpsertInsurance(
+	ctx context.Context,
+	ex execer,
+	workOrderID uuid.UUID,
+	ins dto.InsuranceIntake) error {
+	_, err := ex.Exec(ctx, `
+		INSERT INTO app.insurance
+		(work_order_id, insurance_company, agent_first_name, agent_last_name, agent_phone, policy_number, claim_number)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (work_order_id) DO UPDATE SET
+			insurance_company = EXCLUDED.insurance_company,
+			agent_first_name = EXCLUDED.agent_first_name,
+			agent_last_name = EXCLUDED.agent_last_name,
+			agent_phone = EXCLUDED.agent_phone,
+			policy_number = EXCLUDED.policy_number,
+			claim_number = EXCLUDED.claim_number
+		`, workOrderID, nullIfEmpty(ins.InsuranceCompany), nullIfEmpty(ins.AgentFirstName), nullIfEmpty(ins.AgentLastName), nullIfEmpty(ins.AgentPhone), nullIfEmpty(ins.PolicyNumber), nullIfEmpty(ins.ClaimNumber))
+	return err
 }

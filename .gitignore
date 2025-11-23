@@ -1,7 +1,7 @@
 # Environment & secrets
 .env
 secret/
-service_account.json
+service-account.json
 # Ignore vsCode settings folder
 .vscode/
 

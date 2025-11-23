@@ -26,6 +26,7 @@ type Repository interface {
 	TouchLastSignInNowByExternalID(ctx context.Context, externalID string) error
 	GetRoleIDByCode(ctx context.Context, code string) (uuid.UUID, error)
 	GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error)
+	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 }
 
 type pgRepo struct {
@@ -347,4 +348,25 @@ func (r *pgRepo) GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, e
 		return uuid.Nil, mapPgError(err)
 	}
 	return id, nil
+}
+
+func (r *pgRepo) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
+	const q = `
+UPDATE app.users
+SET email_verified = TRUE,
+    updated_at     = NOW()
+WHERE id = $1 AND email_verified = FALSE
+`
+	ct, err := r.db.Exec(ctx, q, id)
+	if err != nil {
+		return mapPgError(err)
+	}
+	if ct.RowsAffected() == 0 {
+		// Either not found or already verified
+		// Return error only if not found
+		if _, err := r.GetByID(ctx, id); err != nil {
+			return ErrNotFound
+		}
+	}
+	return nil
 }

@@ -198,12 +198,8 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 
 	//3. Insert work order and capture work order ID and code
 
-	//真的没招了！！！这里！！现在是！！ shop_id  hard code 一个值进去！！！
-	//COMMIT 之前一定要改！！！！！！
-	//但是要怎么改！！！没有auth CONTEXT！！我也改不了啊！！！！
-	//只能先这样了！！！！！
-	var shopID uuid.UUID = uuid.MustParse("f4975c12-4fc4-4fe0-9c33-92bd2cc85883")
-	//！！！！！！！！！！！！！！！！！！！！！！！！！！
+	//shop id is hardcoded for now
+	var shopID uuid.UUID = uuid.MustParse("b155dd33-0253-48c2-86e9-08ad08c388e7")
 
 	var workOrderID uuid.UUID
 	var workOrderCode string

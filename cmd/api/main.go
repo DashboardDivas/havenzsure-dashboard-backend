@@ -12,12 +12,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/database"
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/server"
 	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
+	ctx := context.Background()
+
+	// Initialize Firebase/GCIP
+	log.Println("Initializing Firebase/GCIP...")
+	if err := auth.InitFirebase(ctx); err != nil {
+		log.Fatalf("Unable to initialize Firebase: %v\n", err)
+	}
 
 	// Initialize the database connection
 	databaseService, dbError := database.InitDB()

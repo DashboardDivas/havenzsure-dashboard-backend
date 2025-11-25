@@ -103,6 +103,11 @@ func (m *MockRepository) GetShopIDByCode(ctx context.Context, code string) (uuid
 	return id, args.Error(1)
 }
 
+func (m *MockRepository) MarkEmailVerified(ctx context.Context, id uuid.UUID) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
 // ============================================================================
 // Validation Tests - Helper Functions
 // ============================================================================
@@ -839,7 +844,7 @@ func TestDeactivateUserSuccess(t *testing.T) {
 
 		mockRepo.On("Deactivate", ctx, userID, (*uuid.UUID)(nil)).Return(nil)
 
-		err := svc.DeactivateUser(ctx, userID, nil)
+		err := svc.DeactivateUser(ctx, userID)
 
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
@@ -851,11 +856,10 @@ func TestDeactivateUserSuccess(t *testing.T) {
 		ctx := context.Background()
 
 		userID := uuid.New()
-		byUserID := uuid.New()
 
-		mockRepo.On("Deactivate", ctx, userID, &byUserID).Return(nil)
+		mockRepo.On("Deactivate", ctx, userID).Return(nil)
 
-		err := svc.DeactivateUser(ctx, userID, &byUserID)
+		err := svc.DeactivateUser(ctx, userID)
 
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
@@ -889,7 +893,7 @@ func TestDeactivateUserError(t *testing.T) {
 			mockRepo.On("Deactivate", ctx, mock.Anything, mock.Anything).
 				Return(ErrNotFound)
 
-			err := svc.DeactivateUser(ctx, userID, nil)
+			err := svc.DeactivateUser(ctx, userID)
 
 			assert.Error(t, err)
 			mockRepo.AssertExpectations(t)

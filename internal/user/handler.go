@@ -3,10 +3,12 @@ package user
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -25,9 +27,11 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/", h.create)
 	r.Get("/", h.list)
 	r.Get("/{id}", h.getByID)
+	r.Get("/me", h.getCurrentUser)
 	r.Put("/{id}", h.update)
 	r.Put("/{id}/deactivate", h.deactivate)
 	r.Put("/{id}/reactivate", h.reactivate)
+	r.Post("/{id}/resend-password-link", h.resendPasswordSetupLink)
 }
 
 /* -------------------- CRUD Handlers -------------------- */
@@ -57,6 +61,24 @@ func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.svc.GetUserByID(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, user.ToResponse())
+}
+
+func (h *Handler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
+	//get auth user from context
+	authUser, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	//get user by external ID
+	user, err := h.svc.GetUserByExternalID(r.Context(), authUser.ExternalID)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -120,7 +142,7 @@ func (h *Handler) deactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeactivateUser(r.Context(), id, nil); err != nil {
+	if err := h.svc.DeactivateUser(r.Context(), id); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -142,6 +164,27 @@ func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// resendPasswordSetupLink resends password setup link to user
+// POST /users/{id}/resend-password-link
+func (h *Handler) resendPasswordSetupLink(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, ErrInvalidInput)
+		return
+	}
+
+	if err := h.svc.ResendPasswordSetupLink(r.Context(), id); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	// Return success message
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Password setup link sent successfully",
+	})
 }
 
 /* -------------------- Helpers -------------------- */
@@ -173,6 +216,10 @@ func httpError(w http.ResponseWriter, status int, msg string) {
 
 // writeError classifies known domain errors and delegates to httpError.
 func writeError(w http.ResponseWriter, err error) {
+	// Log the error for server-side diagnostics
+	log.Printf("[ERROR] %v", err)
+
+	// Map domain errors to HTTP status codes
 	switch {
 
 	case errors.Is(err, ErrInvalidInput):

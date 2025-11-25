@@ -52,7 +52,7 @@ type UserService interface {
 	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
 	ListUsers(ctx context.Context, limit, offset int) ([]*User, error)
 	UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserInput) (*User, error)
-	DeactivateUser(ctx context.Context, id uuid.UUID, byUserID *uuid.UUID) error
+	DeactivateUser(ctx context.Context, id uuid.UUID) error
 	ReactivateUser(ctx context.Context, id uuid.UUID) error
 	ResendPasswordSetupLink(ctx context.Context, userID uuid.UUID) error
 }
@@ -337,7 +337,7 @@ func (s *service) UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserIn
 	return user, nil
 }
 
-func (s *service) DeactivateUser(ctx context.Context, id uuid.UUID, byUserID *uuid.UUID) error {
+func (s *service) DeactivateUser(ctx context.Context, id uuid.UUID) error {
 	// Get current user
 	currentUser, err := auth.GetAuthUser(ctx)
 	if err != nil {
@@ -362,7 +362,7 @@ func (s *service) DeactivateUser(ctx context.Context, id uuid.UUID, byUserID *uu
 	}
 
 	// Deactivate in database
-	if err := s.repo.Deactivate(ctx, id, byUserID); err != nil {
+	if err := s.repo.Deactivate(ctx, id, &currentUser.ID); err != nil {
 		return fmt.Errorf("service deactivate user: %w", err)
 	}
 

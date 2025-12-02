@@ -117,3 +117,10 @@ func (u *User) ToResponse() *UserResponse {
 		Shop:          u.Shop,
 	}
 }
+
+// UpdateMeProfileInput represents the fields that the current user
+// is allowed to update on their own profile via /users/me.
+type UpdateMeProfileInput struct {
+	Phone    *string `json:"phone,omitempty"`
+	ImageURL *string `json:"imageUrl,omitempty"`
+}

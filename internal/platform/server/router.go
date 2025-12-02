@@ -53,6 +53,10 @@ func (s *Server) RegisterRoutes(db *pgxpool.Pool) http.Handler {
 	}
 	userHandler := users.NewHandler(userSvc)
 
+	// --- Me route group ---
+	meSvc := users.NewMeService(userSvc)
+	meHandler := users.NewMeHandler(meSvc)
+
 	// --- WorkOrder route group ---
 	workorderRepo := workorder.NewRepository(db)
 	workorderSvc := workorder.NewService(workorderRepo)
@@ -65,6 +69,13 @@ func (s *Server) RegisterRoutes(db *pgxpool.Pool) http.Handler {
 		// Apply authentication middleware
 		// All routes inside this group require valid Firebase/GCIP ID Token
 		r.Use(authMiddleware.Verify)
+
+		// --- Me Routes (all authenticated users) ---
+		// Note: /me routes always refer to the currently authenticated user
+		// No user ID is needed in the URL
+		r.Route("/me", func(sub chi.Router) {
+			meHandler.RegisterRoutes(sub)
+		})
 
 		// --- Shop Routes (SuperAdmin + Admin only) ---
 		r.Route("/shops", func(sub chi.Router) {

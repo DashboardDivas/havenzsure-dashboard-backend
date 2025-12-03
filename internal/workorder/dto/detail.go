@@ -2,15 +2,19 @@ package dto
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type WorkOrderDetail struct {
+	ID           uuid.UUID        `json:"id"`
 	Code         string           `json:"code"`
 	Status       WorkOrderStatus  `json:"status"`
 	DateReceived time.Time        `json:"dateReceived"`
 	DateUpdated  time.Time        `json:"dateUpdated"`
 	Customer     CustomerDetail   `json:"customer"`
 	Vehicle      VehicleDetail    `json:"vehicle"`
+	Shop         ShopSummary      `json:"shop"`
 	Insurance    *InsuranceDetail `json:"insurance,omitempty"`
 }
 

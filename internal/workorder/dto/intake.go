@@ -9,12 +9,13 @@ type IntakePayload struct {
 	Customer  CustomerIntake   `json:"customer"`
 	Vehicle   VehicleIntake    `json:"vehicle"`
 	Insurance *InsuranceIntake `json:"insurance,omitempty"`
-	ShopCode  string           `json:"shopCode"`
+	Shop      ShopRef          `json:"shop"`
 }
 type IntakeEditPayload struct {
 	Customer  *CustomerIntake  `json:"customer,omitempty"`
 	Vehicle   *VehicleIntake   `json:"vehicle,omitempty"`
 	Insurance *InsuranceIntake `json:"insurance,omitempty"`
+	ShopCode  *string          `json:"shopCode,omitempty"`
 }
 
 type CustomerIntake struct {

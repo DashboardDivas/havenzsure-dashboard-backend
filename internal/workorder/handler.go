@@ -6,6 +6,7 @@ import (
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 type Handler struct {
@@ -18,7 +19,7 @@ func NewHandler(s Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListWorkOrder)
-	r.Get("/{code}", h.GetWorkOrderByCode)
+	r.Get("/{id}", h.GetWorkOrderByID)
 	r.Post("/", h.CreateWorkOrder)
 	// r.Put("/{code}/insurance", h.UpsertInsurance)
 
@@ -36,12 +37,17 @@ func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(items)
 }
 
-// GET /workorders/{code}
-func (h *Handler) GetWorkOrderByCode(w http.ResponseWriter, r *http.Request) {
+// GET /workorders/{id}
+func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	code := chi.URLParam(r, "code")
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid UUID format", http.StatusBadRequest)
+		return
+	}
 
-	wo, err := h.service.GetWorkOrderByCode(ctx, code)
+	wo, err := h.service.GetWorkOrderByID(ctx, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return

@@ -25,7 +25,7 @@ type Handler struct {
 func NewHandler(svc ShopService) *Handler { return &Handler{svc: svc} }
 
 // RegisterRoutes mounts the /shops endpoints on the given router.
-// Endpoints (code-centric resource paths):
+// Endpoints (UUID-based resource paths):
 //
 //	POST /shops          -> create a shop
 //	GET  /shops          -> list shops (supports ?limit=&offset=)

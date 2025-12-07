@@ -88,21 +88,12 @@ func (m *AuthMiddleware) Verify(next http.Handler) http.Handler {
 		// 6. Build AuthUser and inject into context
 		authUser := &auth.AuthUser{
 			ID:           dbUser.ID,
-			Code:         dbUser.Code,
 			Email:        dbUser.Email,
-			FirstName:    dbUser.FirstName,
-			LastName:     dbUser.LastName,
 			ExternalID:   dbUser.ExternalID,
 			RoleCode:     dbUser.Role.Code,
-			RoleName:     dbUser.Role.Name,
 			ShopID:       dbUser.ShopID,
 			TokenVersion: dbUser.TokenVersion,
 			IsActive:     dbUser.IsActive,
-		}
-
-		// If user has shop, add shop code
-		if dbUser.Shop != nil {
-			authUser.ShopCode = &dbUser.Shop.Code
 		}
 
 		// Inject into context

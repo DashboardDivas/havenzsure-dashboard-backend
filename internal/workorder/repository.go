@@ -3,17 +3,20 @@ package workorder
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Repository interface {
 	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
-	GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error)
+	GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error)
 	CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
 	//EditorIntake(ctx context.Context, code string, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 }
@@ -29,15 +32,23 @@ func NewRepository(db *pgxpool.Pool) Repository {
 func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error) {
 	rows, err := r.db.Query(ctx, `
 	SELECT 
+		wo.id,
 		wo.code,
 		wo.status,
 		wo.created_at,
 		wo.updated_at,
 		c.first_name || ' ' || c.last_name AS full_name,
-		c.email
+		c.email,
+
+		s.id,
+        s.code,
+        s.shop_name
+
 	FROM app.work_orders AS wo
 	JOIN app.customers AS c
 		ON wo.customer_id = c.id
+	JOIN app.shop AS s
+		ON wo.shop_id = s.id
 	ORDER BY wo.created_at DESC
 	`)
 	if err != nil {
@@ -49,12 +60,16 @@ func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem
 	for rows.Next() {
 		var wl dto.WorkOrderListItem
 		err := rows.Scan(
+			&wl.ID,
 			&wl.Code,
 			&wl.Status,
 			&wl.CreatedAt,
 			&wl.UpdatedAt,
 			&wl.CustomerFullName,
 			&wl.CustomerEmail,
+			&wl.Shop.ShopID,
+			&wl.Shop.ShopCode,
+			&wl.Shop.ShopName,
 		)
 		if err != nil {
 			return nil, err
@@ -64,10 +79,11 @@ func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem
 	return result, rows.Err()
 }
 
-func (r *repository) GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error) {
+func (r *repository) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error) {
 	var detail dto.WorkOrderDetail
 	row := r.db.QueryRow(ctx, `
 		SELECT
+			wo.id,
 			wo.code,
 			wo.status,
 			wo.created_at AS date_received,
@@ -93,14 +109,19 @@ func (r *repository) GetWorkOrderByCode(ctx context.Context, code string) (dto.W
 			i.agent_first_name || ' ' || i.agent_last_name AS agent_full_name,
 			i.agent_phone,
 			i.policy_number,
-			i.claim_number
+			i.claim_number,
+
+			s.id,
+			s.code,
+			s.shop_name
 
 		FROM app.work_orders wo
 		JOIN app.customers c ON wo.customer_id = c.id
 		JOIN app.vehicles  v ON wo.vehicle_id  = v.id
 		LEFT JOIN app.insurance i ON wo.id = i.work_order_id
-		WHERE wo.code = $1
-	`, code)
+		JOIN app.shop s ON wo.shop_id = s.id
+		WHERE wo.id = $1
+	`, id)
 
 	var (
 		insCompany    sql.NullString
@@ -111,6 +132,7 @@ func (r *repository) GetWorkOrderByCode(ctx context.Context, code string) (dto.W
 	)
 
 	err := row.Scan(
+		&detail.ID,
 		&detail.Code,
 		&detail.Status,
 		&detail.DateReceived,
@@ -137,6 +159,10 @@ func (r *repository) GetWorkOrderByCode(ctx context.Context, code string) (dto.W
 		&agentPhone,
 		&policyNumber,
 		&claimNumber,
+
+		&detail.Shop.ShopID,
+		&detail.Shop.ShopCode,
+		&detail.Shop.ShopName,
 	)
 	if err != nil {
 		return detail, err
@@ -166,6 +192,31 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 	}
 
 	defer tx.Rollback(ctx)
+	var shopID uuid.UUID
+	//0. resolve shopID from payload.Shop
+	if payload.Shop.ShopID != uuid.Nil {
+		shopID = payload.Shop.ShopID
+	} else {
+		code := strings.TrimSpace(payload.Shop.ShopCode)
+		if code == "" {
+			// neither shop_id nor shop_code provided
+			return dto.WorkOrderDetail{}, fmt.Errorf("shop identifier missing: either shop_id or shop_code must be provided")
+		}
+
+		// look up shopID by shop code
+		err = tx.QueryRow(ctx, `
+            SELECT id
+            FROM app.shop
+            WHERE code = $1
+        `, code).Scan(&shopID)
+		if err != nil {
+			// handle not found
+			if errors.Is(err, pgx.ErrNoRows) {
+				return dto.WorkOrderDetail{}, fmt.Errorf("shop not found for code %s", code)
+			}
+			return dto.WorkOrderDetail{}, fmt.Errorf("lookup shop by code %s: %w", code, err)
+		}
+	}
 
 	//define customerID to capture inserted customer ID
 	var customerID uuid.UUID
@@ -197,9 +248,6 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 	}
 
 	//3. Insert work order and capture work order ID and code
-
-	//shop id is hardcoded for now
-	var shopID uuid.UUID = uuid.MustParse("b155dd33-0253-48c2-86e9-08ad08c388e7")
 
 	var workOrderID uuid.UUID
 	var workOrderCode string
@@ -242,7 +290,7 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 	if err := tx.Commit(ctx); err != nil {
 		return dto.WorkOrderDetail{}, err
 	}
-	return r.GetWorkOrderByCode(ctx, workOrderCode)
+	return r.GetWorkOrderByID(ctx, workOrderID)
 }
 
 type execer interface {

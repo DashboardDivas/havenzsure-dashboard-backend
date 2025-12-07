@@ -5,14 +5,15 @@ import (
 	"strings"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
+	"github.com/google/uuid"
 )
 
 type Service interface {
 	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
-	GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error)
+	GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error)
 	CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
 	//UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) (dto.WorkOrderDetail, error)
-	//EditIntake(ctx context.Context, code string, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
+	//EditIntake(ctx context.Context, id uuid.UUID, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 }
 
 type service struct {
@@ -28,8 +29,8 @@ func NewService(r Repository) Service {
 func (s *service) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error) {
 	return s.repo.ListWorkOrder(ctx)
 }
-func (s *service) GetWorkOrderByCode(ctx context.Context, code string) (dto.WorkOrderDetail, error) {
-	return s.repo.GetWorkOrderByCode(ctx, code)
+func (s *service) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error) {
+	return s.repo.GetWorkOrderByID(ctx, id)
 }
 func (s *service) CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
 	return s.repo.CreateWorkOrder(ctx, payload)

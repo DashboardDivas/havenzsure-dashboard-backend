@@ -10,6 +10,7 @@ import (
 
 	firabaseAuth "firebase.google.com/go/v4/auth"
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
+	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/shop"
 	"github.com/google/uuid"
 )
 
@@ -59,27 +60,31 @@ type UserService interface {
 
 type service struct {
 	repo        Repository
+	shopService shop.ShopService
 	emailSender EmailSender
 }
 
 // -------------------- Service Constructors -------------------- //
-// NewService creates a new UserService with a default logging email sender.
-func NewService(repo Repository) UserService {
+// NewService constructs a UserService with default email sender (logs emails).
+func NewService(repo Repository, shopSvc shop.ShopService,
+) UserService {
 	return &service{
 		repo:        repo,
+		shopService: shopSvc,
 		emailSender: &logEmailSender{},
 	}
 }
 
 // NewServiceWithEmailSender lets the caller inject a concrete EmailSender
 // (e.g. Gmail SMTP, SendGrid, etc.)
-func NewServiceWithEmailSender(repo Repository, sender EmailSender) UserService {
+func NewServiceWithEmailSender(repo Repository, shopSvc shop.ShopService, sender EmailSender) UserService {
 	if sender == nil {
 		sender = &logEmailSender{}
 	}
 
 	return &service{
 		repo:        repo,
+		shopService: shopSvc,
 		emailSender: sender,
 	}
 }
@@ -129,7 +134,7 @@ func (s *service) CreateUser(ctx context.Context, in *CreateUserInput) (*User, e
 
 	// 5. Convert shopCode to shopID if provided
 	if in.ShopCode != nil && *in.ShopCode != "" {
-		shopID, err := s.repo.GetShopIDByCode(ctx, *in.ShopCode)
+		shopID, err := s.shopService.GetShopIDByCode(ctx, *in.ShopCode)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return nil, NewValidationError("shopCode", "invalid shop code")
@@ -316,7 +321,7 @@ func (s *service) UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserIn
 
 	// Convert shopCode to shopID if provided
 	if in.ShopCode != nil && *in.ShopCode != "" {
-		shopID, err := s.repo.GetShopIDByCode(ctx, *in.ShopCode)
+		shopID, err := s.shopService.GetShopIDByCode(ctx, *in.ShopCode)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return nil, NewValidationError("shopCode", "invalid shop code")

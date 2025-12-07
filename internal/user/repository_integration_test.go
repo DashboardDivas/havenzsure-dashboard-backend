@@ -695,37 +695,3 @@ func TestGetRoleIDByCodeNotFound(t *testing.T) {
 	assert.Equal(t, ErrNotFound, err)
 	assert.Equal(t, uuid.Nil, roleID)
 }
-
-// Test: Get shop ID by shop code
-func TestGetShopIDByCode(t *testing.T) {
-	ctx := context.Background()
-
-	// Check if shop table has data
-	var count int
-	err := testDB.QueryRow(ctx, "SELECT COUNT(*) FROM app.shop").Scan(&count)
-	require.NoError(t, err)
-
-	if count == 0 {
-		t.Skip("No shops in database")
-	}
-
-	var shopCode string
-	err = testDB.QueryRow(ctx, "SELECT code FROM app.shop LIMIT 1").Scan(&shopCode)
-	require.NoError(t, err)
-
-	shopID, err := testRepo.GetShopIDByCode(ctx, shopCode)
-
-	assert.NoError(t, err)
-	assert.NotEqual(t, uuid.Nil, shopID)
-}
-
-// Test: Attempt to get shop ID with non-existent code
-func TestGetShopIDByCodeNotFound(t *testing.T) {
-	ctx := context.Background()
-
-	shopID, err := testRepo.GetShopIDByCode(ctx, "NONEXISTENT")
-
-	assert.Error(t, err)
-	assert.Equal(t, ErrNotFound, err)
-	assert.Equal(t, uuid.Nil, shopID)
-}

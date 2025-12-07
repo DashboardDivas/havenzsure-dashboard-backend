@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -17,8 +18,9 @@ import (
 // The service layer depends on this interface, not on concrete DB details.
 type Repository interface {
 	CreateShop(ctx context.Context, shop *Shop) error
-	GetShopByCode(ctx context.Context, code string) (*Shop, error)
-	UpdateShop(ctx context.Context, shop *Shop) (*Shop, error)
+	GetShopByID(ctx context.Context, id uuid.UUID) (*Shop, error)
+	GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error)
+	UpdateShop(ctx context.Context, id uuid.UUID, shop *Shop) (*Shop, error)
 	ListShops(ctx context.Context, limit, offset int) ([]*Shop, error)
 }
 
@@ -56,20 +58,33 @@ RETURNING id, code, shop_name;`
 	return nil
 }
 
-func (r *PGRepository) GetShopByCode(ctx context.Context, code string) (*Shop, error) {
+func (r *PGRepository) GetShopByID(ctx context.Context, id uuid.UUID) (*Shop, error) {
 	const q = `
 SELECT id, code, shop_name, status, address, city, province, postal_code, contact_name, phone, email, created_at, updated_at
 FROM app.shop
-WHERE code=$1;`
+WHERE id=$1;`
 	var s Shop
-	if err := r.db.QueryRow(ctx, q, code).Scan(&s.ID, &s.Code, &s.ShopName, &s.Status, &s.Address, &s.City, &s.Province, &s.PostalCode,
+	if err := r.db.QueryRow(ctx, q, id).Scan(&s.ID, &s.Code, &s.ShopName, &s.Status, &s.Address, &s.City, &s.Province, &s.PostalCode,
 		&s.ContactName, &s.Phone, &s.Email, &s.CreatedAt, &s.UpdatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("failed to get the shop by code: %w", err)
+		return nil, fmt.Errorf("failed to get the shop by id: %w", err)
 	}
 	return &s, nil
+}
+
+func (r *PGRepository) GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.db.QueryRow(ctx,
+		"SELECT id FROM app.shop WHERE code = $1", code).Scan(&id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrNotFound
+		}
+		return uuid.Nil, fmt.Errorf("failed to get the shop id by code: %w", err)
+	}
+	return id, nil
 }
 
 func (r *PGRepository) ListShops(ctx context.Context, limit, offset int) ([]*Shop, error) {
@@ -101,7 +116,13 @@ LIMIT $1 OFFSET $2;`
 	return shops, nil
 }
 
-func (r *PGRepository) UpdateShop(ctx context.Context, s *Shop) (*Shop, error) {
+func (r *PGRepository) UpdateShop(ctx context.Context, id uuid.UUID, s *Shop) (*Shop, error) {
+	if s == nil {
+		return nil, ErrInvalidInput
+	}
+	if id == uuid.Nil {
+		return nil, ErrInvalidInput
+	}
 	const q = `
 UPDATE app.shop
 SET code=$2, shop_name=$3, status=$4, address=$5, city=$6, province=$7, postal_code=$8,
@@ -110,7 +131,7 @@ WHERE id=$1
 RETURNING id, code, shop_name, status, address, city, province, postal_code,
           contact_name, phone, email, created_at, updated_at;`
 	row := r.db.QueryRow(ctx, q,
-		s.ID, s.Code, s.ShopName, s.Status, s.Address, s.City, s.Province, s.PostalCode,
+		id, s.Code, s.ShopName, s.Status, s.Address, s.City, s.Province, s.PostalCode,
 		s.ContactName, s.Phone, s.Email,
 	)
 	var updatedShop Shop

@@ -25,7 +25,6 @@ type Repository interface {
 	IncrementTokenVersion(ctx context.Context, id uuid.UUID) error
 	TouchLastSignInNowByExternalID(ctx context.Context, externalID string) error
 	GetRoleIDByCode(ctx context.Context, code string) (uuid.UUID, error)
-	GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 }
 
@@ -334,16 +333,6 @@ func (r *pgRepo) GetRoleIDByCode(ctx context.Context, code string) (uuid.UUID, e
 	var id uuid.UUID
 	err := r.db.QueryRow(ctx,
 		"SELECT id FROM app.roles WHERE code = $1", code).Scan(&id)
-	if err != nil {
-		return uuid.Nil, mapPgError(err)
-	}
-	return id, nil
-}
-
-func (r *pgRepo) GetShopIDByCode(ctx context.Context, code string) (uuid.UUID, error) {
-	var id uuid.UUID
-	err := r.db.QueryRow(ctx,
-		"SELECT id FROM app.shop WHERE code = $1", code).Scan(&id)
 	if err != nil {
 		return uuid.Nil, mapPgError(err)
 	}

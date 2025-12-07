@@ -9,9 +9,9 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // Handler wires HTTP endpoints to the ShopService.
@@ -29,13 +29,13 @@ func NewHandler(svc ShopService) *Handler { return &Handler{svc: svc} }
 //
 //	POST /shops          -> create a shop
 //	GET  /shops          -> list shops (supports ?limit=&offset=)
-//	GET  /shops/{code}   -> fetch one shop by code
-//	PUT  /shops/{code}   -> update a shop identified by code
+//	GET  /shops/{id}     -> get a shop by ID
+//	PUT  /shops/{id}     -> update a shop by ID
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Post("/", h.create)
 	r.Get("/", h.list)
-	r.Get("/{code}", h.getByCode)
-	r.Put("/{code}", h.updateByCode)
+	r.Get("/{id}", h.getByID)
+	r.Put("/{id}", h.update)
 }
 
 // create handles POST /shops.
@@ -58,13 +58,19 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, &s)
 }
 
-// getByCode handles GET /shops/{code}.
-// - Extracts the code from the path.
-// - Retrieves the shop from the service.
-// - Returns 200 with the shop JSON.
-func (h *Handler) getByCode(w http.ResponseWriter, r *http.Request) {
-	code := strings.TrimSpace(chi.URLParam(r, "code"))
-	out, err := h.svc.GetShopByCode(r.Context(), code)
+// getByID handles GET /shops/{id}.
+// - Parses the {id} path param.
+// - Delegates fetching to the service.
+// - Returns 200 with the shop on success.
+func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
+	if err != nil {
+		writeError(w, ErrInvalidInput)
+		return
+	}
+
+	out, err := h.svc.GetShopByID(r.Context(), id)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -93,18 +99,16 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// updateByCode handles PUT /shops/{code}.
-// Because the write API uses ID in the repository, we:
-//  1. Look up the existing record by code to get its ID.
-//  2. Decode the request body.
-//  3. Set in.ID to the current record's ID (so we update the correct row).
-//  4. Call UpdateShop and return the updated record.
-func (h *Handler) updateByCode(w http.ResponseWriter, r *http.Request) {
-	code := strings.TrimSpace(chi.URLParam(r, "code"))
-
-	current, err := h.svc.GetShopByCode(r.Context(), code)
+// update handles PUT /shops/{id}.
+// - Parses the {id} path param.
+// - Decodes the JSON payload into a Shop.
+// - Delegates updating to the service.
+// - Returns 200 with the updated shop.
+func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := uuid.Parse(idStr)
 	if err != nil {
-		writeError(w, err)
+		writeError(w, ErrInvalidInput)
 		return
 	}
 
@@ -114,10 +118,7 @@ func (h *Handler) updateByCode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Ensure we update the resource identified by the path.
-	in.ID = current.ID
-
-	out, err := h.svc.UpdateShop(r.Context(), &in)
+	out, err := h.svc.UpdateShop(r.Context(), id, &in)
 	if err != nil {
 		writeError(w, err)
 		return

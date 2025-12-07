@@ -47,9 +47,9 @@ func (s *Server) RegisterRoutes(db *pgxpool.Pool) http.Handler {
 	var userSvc users.UserService
 	if smtpSender, err := users.NewSMTPSenderFromEnv(); err != nil {
 		log.Printf("WARNING: failed to initialize SMTP sender: %v; falling back to log-only sender", err)
-		userSvc = users.NewService(userRepo)
+		userSvc = users.NewService(userRepo, shopSvc)
 	} else {
-		userSvc = users.NewServiceWithEmailSender(userRepo, smtpSender)
+		userSvc = users.NewServiceWithEmailSender(userRepo, shopSvc, smtpSender)
 	}
 	userHandler := users.NewHandler(userSvc)
 

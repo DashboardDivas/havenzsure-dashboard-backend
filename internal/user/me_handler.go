@@ -57,7 +57,7 @@ func (h *MeHandler) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 2) Delegate to MeService.UpdateProfile
-	updatedUser, err := h.svc.UpdateProfile(r.Context(), authUser.ExternalID, &in)
+	updatedUser, err := h.svc.UpdateProfile(r.Context(), authUser, &in)
 	if err != nil {
 		writeError(w, err)
 		return

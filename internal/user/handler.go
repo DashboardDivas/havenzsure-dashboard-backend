@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
@@ -35,13 +36,19 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 /* -------------------- CRUD Handlers -------------------- */
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	var in CreateUserInput
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
 		writeError(w, ErrInvalidInput)
 		return
 	}
 
-	user, err := h.svc.CreateUser(r.Context(), &in)
+	user, err := h.svc.CreateUser(r.Context(), actor, &in)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -51,6 +58,12 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -58,7 +71,7 @@ func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.svc.GetUserByID(r.Context(), id)
+	user, err := h.svc.GetUserByID(r.Context(), actor, id)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -68,6 +81,11 @@ func (h *Handler) getByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	limit := atoiDefault(r.URL.Query().Get("limit"), 50)
 	offset := atoiDefault(r.URL.Query().Get("offset"), 0)
 	if limit <= 0 {
@@ -77,7 +95,7 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 		offset = 0
 	}
 
-	users, err := h.svc.ListUsers(r.Context(), limit, offset)
+	users, err := h.svc.ListUsers(r.Context(), actor, limit, offset)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -92,6 +110,12 @@ func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -105,7 +129,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.svc.UpdateUser(r.Context(), id, &in)
+	user, err := h.svc.UpdateUser(r.Context(), actor, id, &in)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -115,6 +139,12 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) deactivate(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -122,7 +152,7 @@ func (h *Handler) deactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.DeactivateUser(r.Context(), id); err != nil {
+	if err := h.svc.DeactivateUser(r.Context(), actor, id); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -131,6 +161,11 @@ func (h *Handler) deactivate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -138,7 +173,7 @@ func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.ReactivateUser(r.Context(), id); err != nil {
+	if err := h.svc.ReactivateUser(r.Context(), actor, id); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -149,6 +184,12 @@ func (h *Handler) reactivate(w http.ResponseWriter, r *http.Request) {
 // resendPasswordSetupLink resends password setup link to user
 // POST /users/{id}/resend-password-link
 func (h *Handler) resendPasswordSetupLink(w http.ResponseWriter, r *http.Request) {
+	actor, err := auth.GetAuthUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
 	idStr := strings.TrimSpace(chi.URLParam(r, "id"))
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -156,7 +197,7 @@ func (h *Handler) resendPasswordSetupLink(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if err := h.svc.ResendPasswordSetupLink(r.Context(), id); err != nil {
+	if err := h.svc.ResendPasswordSetupLink(r.Context(), actor, id); err != nil {
 		writeError(w, err)
 		return
 	}

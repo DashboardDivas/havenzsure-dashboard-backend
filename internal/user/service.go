@@ -48,14 +48,14 @@ func (s *logEmailSender) SendPasswordSetupReminder(ctx context.Context, email, f
 
 // UserService defines business logic for users
 type UserService interface {
-	CreateUser(ctx context.Context, in *CreateUserInput) (*User, error)
-	GetUserByID(ctx context.Context, id uuid.UUID) (*User, error)
+	CreateUser(ctx context.Context, actor *auth.AuthUser, in *CreateUserInput) (*User, error)
+	GetUserByID(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) (*User, error)
 	GetUserByExternalID(ctx context.Context, externalID string) (*User, error)
-	ListUsers(ctx context.Context, limit, offset int) ([]*User, error)
-	UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserInput) (*User, error)
-	DeactivateUser(ctx context.Context, id uuid.UUID) error
-	ReactivateUser(ctx context.Context, id uuid.UUID) error
-	ResendPasswordSetupLink(ctx context.Context, userID uuid.UUID) error
+	ListUsers(ctx context.Context, actor *auth.AuthUser, limit, offset int) ([]*User, error)
+	UpdateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID, in *UpdateUserInput) (*User, error)
+	DeactivateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) error
+	ReactivateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) error
+	ResendPasswordSetupLink(ctx context.Context, actor *auth.AuthUser, userID uuid.UUID) error
 }
 
 type service struct {
@@ -98,15 +98,15 @@ func NewServiceWithEmailSender(repo Repository, shopSvc shop.ShopService, sender
 //  4. Save to database
 //  5. Generate password reset link
 //  6. Send welcome email with password setup link (async)
-func (s *service) CreateUser(ctx context.Context, in *CreateUserInput) (*User, error) {
+func (s *service) CreateUser(ctx context.Context, actor *auth.AuthUser, in *CreateUserInput) (*User, error) {
 	if in == nil {
 		return nil, ErrInvalidInput
 	}
 
 	// 1. Get current user (the one performing the creation)
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return nil, fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// 2. Normalize input
@@ -202,11 +202,11 @@ func (s *service) CreateUser(ctx context.Context, in *CreateUserInput) (*User, e
 	return user, nil
 }
 
-func (s *service) GetUserByID(ctx context.Context, id uuid.UUID) (*User, error) {
+func (s *service) GetUserByID(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) (*User, error) {
 	// Get current user for permission check
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return nil, fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Get target user
@@ -234,7 +234,7 @@ func (s *service) GetUserByExternalID(ctx context.Context, externalID string) (*
 	return u, nil
 }
 
-func (s *service) ListUsers(ctx context.Context, limit, offset int) ([]*User, error) {
+func (s *service) ListUsers(ctx context.Context, actor *auth.AuthUser, limit, offset int) ([]*User, error) {
 	if limit <= 0 {
 		limit = 50
 	}
@@ -247,9 +247,9 @@ func (s *service) ListUsers(ctx context.Context, limit, offset int) ([]*User, er
 	}
 
 	// Get current user
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return nil, fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Admin can only see:
@@ -276,16 +276,16 @@ func (s *service) ListUsers(ctx context.Context, limit, offset int) ([]*User, er
 	return list, nil
 }
 
-func (s *service) UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserInput) (*User, error) {
+func (s *service) UpdateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID, in *UpdateUserInput) (*User, error) {
 	if in == nil {
 		return nil, ErrInvalidInput
 	}
 	in.EmailVerified = nil // Prevent emailVerified from being updated here
 
 	// Get current user
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return nil, fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Get target user
@@ -342,11 +342,11 @@ func (s *service) UpdateUser(ctx context.Context, id uuid.UUID, in *UpdateUserIn
 	return user, nil
 }
 
-func (s *service) DeactivateUser(ctx context.Context, id uuid.UUID) error {
+func (s *service) DeactivateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) error {
 	// Get current user
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Get target user
@@ -380,11 +380,11 @@ func (s *service) DeactivateUser(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *service) ReactivateUser(ctx context.Context, id uuid.UUID) error {
+func (s *service) ReactivateUser(ctx context.Context, actor *auth.AuthUser, id uuid.UUID) error {
 	// Get current user
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Get target user
@@ -419,11 +419,11 @@ func (s *service) ReactivateUser(ctx context.Context, id uuid.UUID) error {
 
 // ResendPasswordSetupLink generates and sends a new password setup link
 // Used when user didn't receive initial email or link expired
-func (s *service) ResendPasswordSetupLink(ctx context.Context, userID uuid.UUID) error {
+func (s *service) ResendPasswordSetupLink(ctx context.Context, actor *auth.AuthUser, userID uuid.UUID) error {
 	// Get current user (for permission check)
-	currentUser, err := auth.GetAuthUser(ctx)
-	if err != nil {
-		return fmt.Errorf("unauthorized: %w", err)
+	currentUser := actor
+	if currentUser == nil {
+		return fmt.Errorf("unauthorized: no auth user in context")
 	}
 
 	// Get target user

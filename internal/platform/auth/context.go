@@ -1,3 +1,6 @@
+// Package auth provides request-level identity models (AuthUser) and context helpers.
+// It does NOT contain Firebase logic (see firebase.go) or authorization middleware.
+
 package auth
 
 import (
@@ -13,19 +16,14 @@ type contextKey string
 const authUserKey contextKey = "authUser"
 
 // AuthUser is the user information injected into request context
-// Contains complete user data queried from DB
+// Contains limited fields needed for authorization and auditing
 type AuthUser struct {
 	ID           uuid.UUID  `json:"id"`
-	Code         string     `json:"code"`
 	Email        string     `json:"email"`
-	FirstName    string     `json:"firstName"`
-	LastName     string     `json:"lastName"`
-	ExternalID   string     `json:"externalId"`   // GCIP UID
-	RoleCode     string     `json:"roleCode"`     // "superadmin", "admin", "adjuster", "bodyman"
-	RoleName     string     `json:"roleName"`     // "Super Administrator", etc.
-	ShopID       *uuid.UUID `json:"shopId"`       // May be nil
-	ShopCode     *string    `json:"shopCode"`     // May be nil
-	TokenVersion int        `json:"tokenVersion"` // For token revocation
+	ExternalID   string     `json:"externalId"`       // GCIP UID
+	RoleCode     string     `json:"roleCode"`         // "superadmin", "admin", "adjuster", "bodyman"
+	ShopID       *uuid.UUID `json:"shopId,omitempty"` // Nullable
+	TokenVersion int        `json:"tokenVersion"`     // For token revocation
 	IsActive     bool       `json:"isActive"`
 }
 

@@ -40,7 +40,7 @@ func (h *MeHandler) getCurrentUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3) Return the current user's UserResponse
-	writeJSON(w, http.StatusOK, user.ToResponse())
+	writeJSON(w, http.StatusOK, user.ToMeResponse())
 }
 
 // PUT /me
@@ -57,10 +57,10 @@ func (h *MeHandler) updateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 2) Delegate to MeService.UpdateProfile
-	updatedUser, err := h.svc.UpdateProfile(r.Context(), authUser.ExternalID, &in)
+	updatedUser, err := h.svc.UpdateProfile(r.Context(), authUser, &in)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, updatedUser.ToResponse())
+	writeJSON(w, http.StatusOK, updatedUser.ToMeResponse())
 }

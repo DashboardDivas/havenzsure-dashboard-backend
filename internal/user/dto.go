@@ -93,6 +93,10 @@ type UserResponse struct {
 
 // ToResponse converts User (internal) to UserResponse (for API)
 func (u *User) ToResponse() *UserResponse {
+	if u == nil {
+		return nil
+	}
+
 	return &UserResponse{
 		ID:            u.ID,
 		Code:          u.Code,

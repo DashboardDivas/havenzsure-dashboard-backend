@@ -26,14 +26,12 @@ func (s *meService) GetCurrentUser(ctx context.Context, externalID string) (*Use
 }
 
 func (s *meService) UpdateProfile(ctx context.Context, actor *auth.AuthUser, in *UpdateMeProfileInput) (*User, error) {
-	// 1) use externalID to get User
-	u, err := s.userSvc.GetUserByExternalID(ctx, actor.ExternalID)
-	if err != nil {
-		return nil, err
+	// 1)
+	if actor == nil {
+		return nil, ErrInvalidInput
 	}
 
 	// 2) Compose UpdateUserInput with only phone / imageUrl
-
 	upd := &UpdateUserInput{
 		Phone:    in.Phone,
 		ImageURL: in.ImageURL,
@@ -43,5 +41,5 @@ func (s *meService) UpdateProfile(ctx context.Context, actor *auth.AuthUser, in 
 	// UpdateProfile constructs an UpdateUserInput that only allows phone/imageUrl to be updated.
 	// If additional fields are added to UpdateMeProfileInput in the future, they must still pass
 	// UserService.UpdateUser RBAC checks, which enforce all role/shop permission rules.
-	return s.userSvc.UpdateUser(ctx, actor, u.ID, upd)
+	return s.userSvc.UpdateUser(ctx, actor, actor.ID, upd)
 }

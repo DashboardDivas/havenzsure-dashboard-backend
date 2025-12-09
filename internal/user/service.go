@@ -125,23 +125,63 @@ func (s *service) CreateUser(ctx context.Context, actor *auth.AuthUser, in *Crea
 	}
 	in.RoleID = roleID
 
-	// 4. Permission check: Admin cannot create admin or superadmin
+	// 4. Permission check: Admin cannot create admin or superadmin and shop enforced
 	if currentUser.IsAdminOnly() {
 		if in.RoleCode == auth.RoleAdmin || in.RoleCode == auth.RoleSuperAdmin {
 			return nil, NewValidationError("roleCode", "admin cannot create admin or superadmin users")
 		}
 	}
 
-	// 5. Convert shopCode to shopID if provided
-	if in.ShopCode != nil && *in.ShopCode != "" {
-		shopID, err := s.shopService.GetShopIDByCode(ctx, *in.ShopCode)
-		if err != nil {
-			if errors.Is(err, ErrNotFound) {
-				return nil, NewValidationError("shopCode", "invalid shop code")
+	// 5. Handle shop assignment based on current user's role
+	switch {
+	case currentUser.IsSuperAdmin():
+		// SuperAdmin: Can assign any shop or none
+		// If shopCode is provided, convert it to shopID
+		if in.ShopCode != nil && *in.ShopCode != "" {
+			shopID, err := s.shopService.GetShopIDByCode(ctx, *in.ShopCode)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return nil, NewValidationError("shopCode", "invalid shop code")
+				}
+				return nil, fmt.Errorf("lookup shopCode: %w", err)
 			}
-			return nil, fmt.Errorf("lookup shopCode: %w", err)
+			in.ShopID = &shopID
 		}
-		in.ShopID = &shopID
+
+		// Non-superadmin users must be assigned to a shop
+		if in.RoleCode != auth.RoleSuperAdmin && in.ShopID == nil {
+			return nil, NewValidationError("shopCode", "non-superadmin users must be assigned to a shop")
+		}
+
+	case currentUser.IsAdminOnly():
+		if !currentUser.HasShop() {
+			return nil, fmt.Errorf("admin user is missing shop assignment")
+		}
+
+		// Admin: Can only assign users to their own shop
+		// If shopCode is provided, must match their own shop
+		if in.ShopCode != nil && *in.ShopCode != "" {
+			shopID, err := s.shopService.GetShopIDByCode(ctx, *in.ShopCode)
+			if err != nil {
+				if errors.Is(err, ErrNotFound) {
+					return nil, NewValidationError("shopCode", "invalid shop code")
+				}
+				return nil, fmt.Errorf("lookup shopCode: %w", err)
+			}
+
+			if currentUser.ShopID == nil || *currentUser.ShopID != shopID {
+				return nil, NewValidationError("shopCode", "admin can only assign users to their own shop")
+			}
+
+			in.ShopID = &shopID
+		} else {
+			// If shopCode is not provided, use the admin's own shop
+			in.ShopID = currentUser.ShopID
+		}
+	default:
+		// Should not happen: only admins/superadmins are allowed to hit this service.
+		// Keep as a safety net in case routing or middleware is misconfigured.
+		return nil, NewValidationError("permissions", "insufficient permissions to create users")
 	}
 
 	// 6. Validate input
@@ -467,8 +507,13 @@ func (s *service) canViewUser(currentUser *auth.AuthUser, targetUser *User) bool
 		// Admin CAN see:
 		//  - themselves
 		//  - other admins (read-only handled elsewhere)
-		//  - adjusters / bodymen
-		return true
+		//  - adjusters / bodymen in the same shop
+		if targetUser.Role.Code == auth.RoleAdmin {
+			return true
+		}
+		// For adjuster/bodyman, must be in the same shop
+		return targetUser.ShopID != nil && currentUser.ShopID != nil &&
+			*targetUser.ShopID == *currentUser.ShopID
 	}
 
 	// For now, other roles should not normally hit this service-level method.
@@ -485,15 +530,26 @@ func (s *service) canManageUser(currentUser *auth.AuthUser, targetUser *User) er
 	}
 
 	// Admin restrictions
-	if currentUser.IsAdminOnly() {
-		// Cannot manage other admins (but can manage self)
-		if targetUser.Role.Code == auth.RoleAdmin && targetUser.ID != currentUser.ID {
-			return NewValidationError("permissions", "cannot manage other admin users")
-		}
+	if currentUser.RoleCode == auth.RoleAdmin {
 
 		// Cannot manage superadmins
 		if targetUser.Role.Code == auth.RoleSuperAdmin {
 			return NewValidationError("permissions", "cannot manage superadmin users")
+		}
+
+		// Cannot manage other admins (except self)
+		if targetUser.Role.Code == auth.RoleAdmin && targetUser.ID != currentUser.ID {
+			return NewValidationError("permissions", "cannot manage other admin users")
+		}
+
+		// Admin can manage staff only within own shop
+		if targetUser.Role.Code != auth.RoleAdmin { // staff or lower
+			if currentUser.ShopID == nil || targetUser.ShopID == nil {
+				return NewValidationError("permissions", "shop assignment missing")
+			}
+			if *currentUser.ShopID != *targetUser.ShopID {
+				return NewValidationError("permissions", "cannot manage users from another shop")
+			}
 		}
 	}
 
@@ -510,6 +566,10 @@ func (s *service) checkFieldUpdatePermission(currentUser *auth.AuthUser, targetU
 
 	// Admin restrictions
 	if currentUser.IsAdminOnly() {
+		// Cannot change shop assignment
+		if updates.ShopCode != nil {
+			return NewValidationError("shopCode", "cannot change shop assignment")
+		}
 		// Cannot promote anyone to admin
 		if updates.RoleCode != nil && *updates.RoleCode == auth.RoleAdmin {
 			return NewValidationError("roleCode", "cannot promote users to admin role")

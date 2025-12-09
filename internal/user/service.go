@@ -126,8 +126,8 @@ func (s *service) CreateUser(ctx context.Context, actor *auth.AuthUser, in *Crea
 	in.RoleID = roleID
 
 	// 4. Permission check: Admin cannot create admin or superadmin
-	if currentUser.RoleCode == "admin" {
-		if in.RoleCode == "admin" || in.RoleCode == "superadmin" {
+	if currentUser.IsAdminOnly() {
+		if in.RoleCode == auth.RoleAdmin || in.RoleCode == auth.RoleSuperAdmin {
 			return nil, NewValidationError("roleCode", "admin cannot create admin or superadmin users")
 		}
 	}
@@ -215,12 +215,10 @@ func (s *service) GetUserByID(ctx context.Context, actor *auth.AuthUser, id uuid
 		return nil, fmt.Errorf("service get user by id: %w", err)
 	}
 
-	// Permission check: Admin cannot view superadmins
-	if currentUser.RoleCode == "admin" {
-		if u.Role.Code == "superadmin" {
-			return nil, fmt.Errorf("user not found") // Hide existence of superadmins
-		}
-		// Admin CAN view other admins (just can't modify them)
+	// Apply visibility rules
+	if !s.canViewUser(currentUser, u) {
+		// Hide existence of user
+		return nil, fmt.Errorf("service get user by id: %w", err)
 	}
 
 	return u, nil
@@ -252,21 +250,13 @@ func (s *service) ListUsers(ctx context.Context, actor *auth.AuthUser, limit, of
 		return nil, fmt.Errorf("unauthorized: no auth user in context")
 	}
 
-	// Admin can only see:
-	//   - Themselves (admin)
-	//   - Other admins (read-only)
-	//   - Adjusters, Bodyman
-	// Admin CANNOT see:
-	//   - Superadmins
-	if currentUser.RoleCode == "admin" {
+	// Apply visibility rules
+	if currentUser.IsAdminOnly() {
 		filtered := make([]*User, 0, len(list))
 		for _, u := range list {
-			// Skip all superadmins (admins should not see superadmins)
-			if u.Role.Code == "superadmin" {
+			if !s.canViewUser(currentUser, u) {
 				continue
 			}
-			// Include self and other admins
-			// Include adjuster and bodyman
 			filtered = append(filtered, u)
 		}
 		return filtered, nil
@@ -460,6 +450,32 @@ func (s *service) ResendPasswordSetupLink(ctx context.Context, actor *auth.AuthU
 }
 
 // -------------------- Permission Helpers -------------------- //
+// canViewUser decides whether the actor is allowed to SEE the target user.
+// It controls visibility rules (e.g. hide superadmins from admins).
+func (s *service) canViewUser(currentUser *auth.AuthUser, targetUser *User) bool {
+	// SuperAdmin can see everyone
+	if currentUser.IsSuperAdmin() {
+		return true
+	}
+
+	// Admin visibility rules
+	if currentUser.IsAdminOnly() {
+		// Admin CANNOT see SuperAdmins
+		if targetUser.Role.Code == auth.RoleSuperAdmin {
+			return false
+		}
+		// Admin CAN see:
+		//  - themselves
+		//  - other admins (read-only handled elsewhere)
+		//  - adjusters / bodymen
+		return true
+	}
+
+	// For now, other roles should not normally hit this service-level method.
+	// If they do, default to false to be safe.
+	return false
+}
+
 // canManageUser checks basic management permissions (whether the current user can manage the target user)
 // This function only cares about "who can manage whom", not what specific operation is being performed
 func (s *service) canManageUser(currentUser *auth.AuthUser, targetUser *User) error {
@@ -469,14 +485,14 @@ func (s *service) canManageUser(currentUser *auth.AuthUser, targetUser *User) er
 	}
 
 	// Admin restrictions
-	if currentUser.RoleCode == "admin" {
+	if currentUser.IsAdminOnly() {
 		// Cannot manage other admins (but can manage self)
-		if targetUser.Role.Code == "admin" && targetUser.ID != currentUser.ID {
+		if targetUser.Role.Code == auth.RoleAdmin && targetUser.ID != currentUser.ID {
 			return NewValidationError("permissions", "cannot manage other admin users")
 		}
 
 		// Cannot manage superadmins
-		if targetUser.Role.Code == "superadmin" {
+		if targetUser.Role.Code == auth.RoleSuperAdmin {
 			return NewValidationError("permissions", "cannot manage superadmin users")
 		}
 	}
@@ -493,14 +509,14 @@ func (s *service) checkFieldUpdatePermission(currentUser *auth.AuthUser, targetU
 	}
 
 	// Admin restrictions
-	if currentUser.RoleCode == "admin" {
+	if currentUser.IsAdminOnly() {
 		// Cannot promote anyone to admin
-		if updates.RoleCode != nil && *updates.RoleCode == "admin" {
+		if updates.RoleCode != nil && *updates.RoleCode == auth.RoleAdmin {
 			return NewValidationError("roleCode", "cannot promote users to admin role")
 		}
 
 		// Cannot promote anyone to superadmin
-		if updates.RoleCode != nil && *updates.RoleCode == "superadmin" {
+		if updates.RoleCode != nil && *updates.RoleCode == auth.RoleSuperAdmin {
 			return NewValidationError("roleCode", "cannot promote users to superadmin role")
 		}
 

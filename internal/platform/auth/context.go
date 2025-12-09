@@ -15,6 +15,14 @@ type contextKey string
 
 const authUserKey contextKey = "authUser"
 
+// Canonical role codes used across the system.
+const (
+	RoleSuperAdmin = "superadmin"
+	RoleAdmin      = "admin"
+	RoleAdjuster   = "adjuster"
+	RoleBodyman    = "bodyman"
+)
+
 // AuthUser is the user information injected into request context
 // Contains limited fields needed for authorization and auditing
 type AuthUser struct {
@@ -54,12 +62,22 @@ func (u *AuthUser) HasRole(roles ...string) bool {
 
 // IsSuperAdmin checks if user is SuperAdmin
 func (u *AuthUser) IsSuperAdmin() bool {
-	return u.RoleCode == "superadmin"
+	return u.RoleCode == RoleSuperAdmin
 }
 
-// IsAdmin checks if user is Admin (includes SuperAdmin)
-func (u *AuthUser) IsAdmin() bool {
-	return u.RoleCode == "admin" || u.RoleCode == "superadmin"
+// IsAdminOnly checks if user is exactly Admin (does NOT include SuperAdmin).
+func (u *AuthUser) IsAdminOnly() bool {
+	return u.RoleCode == RoleAdmin
+}
+
+// IsAdminOrAbove checks if user is Admin or SuperAdmin.
+func (u *AuthUser) IsAdminOrAbove() bool {
+	return u.RoleCode == RoleAdmin || u.RoleCode == RoleSuperAdmin
+}
+
+// IsStaff checks if user is a non-admin staff role (adjuster/bodyman).
+func (u *AuthUser) IsStaff() bool {
+	return u.RoleCode == RoleAdjuster || u.RoleCode == RoleBodyman
 }
 
 // HasShop checks if user is assigned to a shop

@@ -53,7 +53,7 @@ func RequireAdminOrAbove() func(http.Handler) http.Handler {
 }
 
 // EnforceShopScope enforces shop-scoped access for non-admin users
-// Admin/SuperAdmin bypass this check; Adjuster/Bodyman can only access their shop's resources
+// SuperAdmin bypass this check; other roles must have a shop assigned.
 // The user's shop ID is injected into context for downstream handlers to filter by shop.
 func EnforceShopScope() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -64,8 +64,8 @@ func EnforceShopScope() func(http.Handler) http.Handler {
 				return
 			}
 
-			// SuperAdmin and Admin are not restricted
-			if authUser.IsSuperAdmin() || authUser.IsAdmin() {
+			// Only SuperAdmin is not restricted
+			if authUser.IsSuperAdmin() {
 				next.ServeHTTP(w, r)
 				return
 			}

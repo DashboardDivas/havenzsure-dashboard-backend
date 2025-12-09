@@ -565,24 +565,39 @@ func (s *service) checkFieldUpdatePermission(currentUser *auth.AuthUser, targetU
 	}
 
 	// Admin restrictions
-	if currentUser.IsAdminOnly() {
+	if currentUser.IsAdminOnly() && updates.ShopCode != nil {
 		// Cannot change shop assignment
-		if updates.ShopCode != nil {
+		newCode := strings.TrimSpace(*updates.ShopCode)
+		oldCode := ""
+		if targetUser.Shop != nil {
+			oldCode = strings.TrimSpace(targetUser.Shop.Code)
+		}
+		if !strings.EqualFold(newCode, oldCode) {
 			return NewValidationError("shopCode", "cannot change shop assignment")
 		}
 		// Cannot promote anyone to admin
-		if updates.RoleCode != nil && *updates.RoleCode == auth.RoleAdmin {
-			return NewValidationError("roleCode", "cannot promote users to admin role")
-		}
+		if updates.RoleCode != nil {
+			newRole := strings.TrimSpace(*updates.RoleCode)
+			oldRole := strings.TrimSpace(targetUser.Role.Code)
 
-		// Cannot promote anyone to superadmin
-		if updates.RoleCode != nil && *updates.RoleCode == auth.RoleSuperAdmin {
-			return NewValidationError("roleCode", "cannot promote users to superadmin role")
-		}
+			// If role is unchanged, skip further checks
+			if strings.EqualFold(newRole, oldRole) {
+			} else {
+				// Cannot promote anyone to admin
+				if newRole == auth.RoleAdmin {
+					return NewValidationError("roleCode", "cannot promote users to admin role")
+				}
 
-		// Cannot change own role
-		if targetUser.ID == currentUser.ID && updates.RoleCode != nil {
-			return NewValidationError("roleCode", "cannot change your own role")
+				// Cannot promote anyone to superadmin
+				if newRole == auth.RoleSuperAdmin {
+					return NewValidationError("roleCode", "cannot promote users to superadmin role")
+				}
+
+				// Cannot change own role
+				if targetUser.ID == currentUser.ID {
+					return NewValidationError("roleCode", "cannot change your own role")
+				}
+			}
 		}
 	}
 

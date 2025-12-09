@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/google/uuid"
 )
@@ -11,7 +12,7 @@ import (
 type Service interface {
 	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
 	GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error)
-	CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
+	CreateWorkOrder(ctx context.Context, authUser platformAuth.AuthUser, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
 	//UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) (dto.WorkOrderDetail, error)
 	//EditIntake(ctx context.Context, id uuid.UUID, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 }
@@ -32,8 +33,8 @@ func (s *service) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, e
 func (s *service) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error) {
 	return s.repo.GetWorkOrderByID(ctx, id)
 }
-func (s *service) CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
-	return s.repo.CreateWorkOrder(ctx, payload)
+func (s *service) CreateWorkOrder(ctx context.Context, actor platformAuth.AuthUser, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
+	return s.repo.CreateWorkOrder(ctx, actor.ID, payload)
 }
 
 // func (s *service) UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) error {

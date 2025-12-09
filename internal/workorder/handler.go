@@ -4,6 +4,10 @@ import (
 	"encoding/json"
 	"net/http"
 
+	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
+
+	"log"
+
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -28,6 +32,18 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 // GET /workorders
 func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	// log.Printf("[InjectUser] path=%s uid=%v", r.URL.Path, authUser.ID)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderList) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
 	items, err := h.service.ListWorkOrder(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -35,11 +51,21 @@ func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
+	log.Printf("[WO List] enter userID=%s", authUser.ID)
 }
 
 // GET /workorders/{id}
 func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	actor, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -59,13 +85,21 @@ func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 // Post /workorders
 func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	actor, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderCreate) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 	var payload dto.IntakePayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-
-	wo, err := h.service.CreateWorkOrder(ctx, payload)
+	wo, err := h.service.CreateWorkOrder(ctx, *actor, payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

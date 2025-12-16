@@ -4,18 +4,18 @@ import (
 	"context"
 	"strings"
 
-	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/google/uuid"
 )
 
 type Service interface {
-	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
-	GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error)
-	CreateWorkOrder(ctx context.Context, authUser platformAuth.AuthUser, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
-	//UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) (dto.WorkOrderDetail, error)
-	//EditIntake(ctx context.Context, id uuid.UUID, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
+	ListWorkOrder(ctx context.Context, actor uuid.UUID) ([]dto.WorkOrderListItem, error)
+	GetWorkOrderByID(ctx context.Context, actor, id uuid.UUID) (dto.WorkOrderDetail, error)
+	CreateWorkOrder(ctx context.Context, actor uuid.UUID, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
 }
+
+//UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) (dto.WorkOrderDetail, error)
+//EditIntake(ctx context.Context, id uuid.UUID, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 
 type service struct {
 	repo Repository
@@ -27,14 +27,16 @@ func NewService(r Repository) Service {
 	return &service{repo: r}
 }
 
-func (s *service) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error) {
-	return s.repo.ListWorkOrder(ctx)
+func (s *service) ListWorkOrder(ctx context.Context, actor uuid.UUID) ([]dto.WorkOrderListItem, error) {
+	return s.repo.ListWorkOrder(ctx, actor)
 }
-func (s *service) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error) {
-	return s.repo.GetWorkOrderByID(ctx, id)
+
+func (s *service) GetWorkOrderByID(ctx context.Context, actor, id uuid.UUID) (dto.WorkOrderDetail, error) {
+	return s.repo.GetWorkOrderByID(ctx, actor, id)
 }
-func (s *service) CreateWorkOrder(ctx context.Context, actor platformAuth.AuthUser, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
-	return s.repo.CreateWorkOrder(ctx, actor.ID, payload)
+
+func (s *service) CreateWorkOrder(ctx context.Context, actor uuid.UUID, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
+	return s.repo.CreateWorkOrder(ctx, actor, payload)
 }
 
 // func (s *service) UpsertInsurance(ctx context.Context, workOrderID string, payload dto.InsuranceIntake) error {

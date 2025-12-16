@@ -2,6 +2,7 @@ package workorder
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
@@ -23,46 +24,48 @@ func NewHandler(s Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListWorkOrder)
-	r.Get("/{id}", h.GetWorkOrderByID)
 	r.Post("/", h.CreateWorkOrder)
-	// r.Put("/{code}/insurance", h.UpsertInsurance)
 
+	r.Route("/{id}", func(r chi.Router) {
+		r.Get("/", h.GetWorkOrderByID)
+		r.Get("/pdf", h.BuildWorkOrderPDF)
+	})
 }
 
 // GET /workorders
 func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	authUser, err := platformAuth.GetAuthUser(ctx)
+	actor, err := platformAuth.GetAuthUser(ctx)
 	// log.Printf("[InjectUser] path=%s uid=%v", r.URL.Path, authUser.ID)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderList) {
+	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderList) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
-	items, err := h.service.ListWorkOrder(ctx)
+	items, err := h.service.ListWorkOrder(ctx, actor.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
-	log.Printf("[WO List] enter userID=%s", authUser.ID)
+	log.Printf("[WO List] enter userID=%s", actor.ID)
 }
 
 // GET /workorders/{id}
 func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	actor, err := platformAuth.GetAuthUser(ctx)
+	authUser, err := platformAuth.GetAuthUser(ctx)
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderDetail) {
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -73,7 +76,7 @@ func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wo, err := h.service.GetWorkOrderByID(ctx, id)
+	wo, err := h.service.GetWorkOrderByID(ctx, authUser.ID, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -99,7 +102,7 @@ func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-	wo, err := h.service.CreateWorkOrder(ctx, *actor, payload)
+	wo, err := h.service.CreateWorkOrder(ctx, actor.ID, payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -112,3 +115,42 @@ func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 // PUT /workorders/{code}/insurance
 
 //Patch /workorders/{code}
+
+func (h *Handler) BuildWorkOrderPDF(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	woID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workorder id", http.StatusBadRequest)
+		return
+	}
+
+	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	pdfBytes, err := BuildWorkOrderPDF(woDetail)
+	if err != nil {
+		http.Error(w, "Failed to build PDF", http.StatusInternalServerError)
+		return
+	}
+
+	filename := fmt.Sprintf("%s.pdf", woDetail.Code)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdfBytes)
+}

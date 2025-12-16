@@ -1,10 +1,3 @@
-// NOTE: This repository currently returns detailed errors (fmt.Errorf) for internal logging.
-// The handler's writeError() function provides the security layer by:
-// 1. Logging detailed errors server-side
-// 2. Returning only generic "internal error" messages to clients
-//
-// TODO: Add mapPgError() function to wrap database errors into domain errors
-// for cleaner architecture, similar to user/shop modules.
 package workorder
 
 import (

@@ -56,7 +56,6 @@ func (m *AuthMiddleware) Verify(next http.Handler) http.Handler {
 		}
 
 		// 3. Query user from DB (by external_id)
-		// To do: consider err handling for DB errors separately
 		dbUser, err := m.userRepo.GetByExternalID(ctx, firebaseToken.UID)
 		if err != nil {
 			// User may exist in GCIP but not in DB (should not happen)

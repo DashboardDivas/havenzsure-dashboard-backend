@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
@@ -35,33 +34,7 @@ func NewShopRepository(db *pgxpool.Pool) *PGRepository {
 	return &PGRepository{db: db}
 }
 
-/* ---------- error mapping ---------- */
-
-func mapPgError(err error) error {
-	if err == nil {
-		return nil
-	}
-
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case pgerrcode.UniqueViolation:
-			return ErrConflict
-		case pgerrcode.ForeignKeyViolation, pgerrcode.CheckViolation, pgerrcode.NotNullViolation:
-			return ErrInvalidInput
-		}
-	}
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrNotFound
-	}
-
-	log.Printf("[Shop DB] Unexpected database error: %v", err)
-	return fmt.Errorf("database operation failed")
-}
-
-/* ---------- queries ---------- */
-
+// Implementing the Repository interface methods
 func (r *PGRepository) CreateShop(ctx context.Context, shop *Shop) error {
 	const q = `INSERT INTO app.shop (code, shop_name, status, address, city, province, postal_code, contact_name, phone, email)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
@@ -71,7 +44,16 @@ RETURNING id, code, shop_name;`
 		shop.City, shop.Province, shop.PostalCode,
 		shop.ContactName, shop.Phone, shop.Email,
 	).Scan(&shop.ID, &shop.Code, &shop.ShopName); err != nil {
-		return mapPgError(err)
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) {
+			switch pe.Code {
+			case pgerrcode.UniqueViolation:
+				return ErrConflict
+			case pgerrcode.NotNullViolation, pgerrcode.CheckViolation:
+				return ErrInvalidInput
+			}
+		}
+		return fmt.Errorf("failed to create shop: %w", err)
 	}
 	return nil
 }
@@ -84,7 +66,10 @@ WHERE id=$1;`
 	var s Shop
 	if err := r.db.QueryRow(ctx, q, id).Scan(&s.ID, &s.Code, &s.ShopName, &s.Status, &s.Address, &s.City, &s.Province, &s.PostalCode,
 		&s.ContactName, &s.Phone, &s.Email, &s.CreatedAt, &s.UpdatedAt); err != nil {
-		return nil, mapPgError(err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get the shop by id: %w", err)
 	}
 	return &s, nil
 }
@@ -94,7 +79,10 @@ func (r *PGRepository) GetShopIDByCode(ctx context.Context, code string) (uuid.U
 	err := r.db.QueryRow(ctx,
 		"SELECT id FROM app.shop WHERE code = $1", code).Scan(&id)
 	if err != nil {
-		return uuid.Nil, mapPgError(err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return uuid.Nil, ErrNotFound
+		}
+		return uuid.Nil, fmt.Errorf("failed to get the shop id by code: %w", err)
 	}
 	return id, nil
 }
@@ -107,7 +95,7 @@ ORDER BY created_at DESC
 LIMIT $1 OFFSET $2;`
 	rows, err := r.db.Query(ctx, q, limit, offset)
 	if err != nil {
-		return nil, mapPgError(err)
+		return nil, fmt.Errorf("failed to execute list shop query: %w", err)
 	}
 	defer rows.Close()
 
@@ -117,15 +105,14 @@ LIMIT $1 OFFSET $2;`
 	for rows.Next() {
 		shop := new(Shop)
 		if err := rows.Scan(&shop.ID, &shop.Code, &shop.ShopName, &shop.Status, &shop.Address, &shop.City, &shop.Province, &shop.PostalCode, &shop.ContactName, &shop.Phone, &shop.Email, &shop.CreatedAt, &shop.UpdatedAt); err != nil {
-			return nil, mapPgError(err)
+			return nil, fmt.Errorf("failed to scan shop row: %w", err)
 		}
 		shops = append(shops, shop)
 	}
-
-	if err := rows.Err(); err != nil {
-		return nil, mapPgError(err)
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list shops: %w", err)
 	}
-
 	return shops, nil
 }
 
@@ -152,7 +139,19 @@ RETURNING id, code, shop_name, status, address, city, province, postal_code,
 		&updatedShop.ID, &updatedShop.Code, &updatedShop.ShopName, &updatedShop.Status, &updatedShop.Address, &updatedShop.City, &updatedShop.Province, &updatedShop.PostalCode,
 		&updatedShop.ContactName, &updatedShop.Phone, &updatedShop.Email, &updatedShop.CreatedAt, &updatedShop.UpdatedAt,
 	); err != nil {
-		return nil, mapPgError(err)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		var pe *pgconn.PgError
+		if errors.As(err, &pe) {
+			switch pe.Code {
+			case pgerrcode.UniqueViolation:
+				return nil, ErrConflict
+			case pgerrcode.NotNullViolation, pgerrcode.CheckViolation:
+				return nil, ErrInvalidInput
+			}
+		}
+		return nil, fmt.Errorf("failed to update shop: %w", err)
 	}
 	return &updatedShop, nil
 }

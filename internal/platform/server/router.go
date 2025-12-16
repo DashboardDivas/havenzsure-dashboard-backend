@@ -28,6 +28,7 @@ func (s *Server) RegisterRoutes(db *pgxpool.Pool) http.Handler {
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type"},
+		ExposedHeaders:   []string{"Content-Disposition"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))

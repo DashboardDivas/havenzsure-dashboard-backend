@@ -2,7 +2,12 @@ package workorder
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+
+	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
+
+	"log"
 
 	"github.com/DashboardDivas/havenzsure-dashboard-backend/internal/workorder/dto"
 	"github.com/go-chi/chi/v5"
@@ -19,27 +24,52 @@ func NewHandler(s Service) *Handler {
 
 func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Get("/", h.ListWorkOrder)
-	r.Get("/{id}", h.GetWorkOrderByID)
 	r.Post("/", h.CreateWorkOrder)
-	// r.Put("/{code}/insurance", h.UpsertInsurance)
 
+	r.Route("/{id}", func(r chi.Router) {
+		r.Get("/", h.GetWorkOrderByID)
+		r.Get("/pdf", h.BuildWorkOrderPDF)
+		r.Post("/email-report", h.EmailWorkOrderReport)
+	})
 }
 
 // GET /workorders
 func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	items, err := h.service.ListWorkOrder(ctx)
+	actor, err := platformAuth.GetAuthUser(ctx)
+	// log.Printf("[InjectUser] path=%s uid=%v", r.URL.Path, authUser.ID)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderList) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	items, err := h.service.ListWorkOrder(ctx, actor.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(items)
+	log.Printf("[WO List] enter userID=%s", actor.ID)
 }
 
 // GET /workorders/{id}
 func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	idStr := chi.URLParam(r, "id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -47,7 +77,7 @@ func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	wo, err := h.service.GetWorkOrderByID(ctx, id)
+	wo, err := h.service.GetWorkOrderByID(ctx, authUser.ID, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
@@ -59,13 +89,21 @@ func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 // Post /workorders
 func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	actor, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderCreate) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	var payload dto.IntakePayload
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 		http.Error(w, "Invalid request payload", http.StatusBadRequest)
 		return
 	}
-
-	wo, err := h.service.CreateWorkOrder(ctx, payload)
+	wo, err := h.service.CreateWorkOrder(ctx, actor.ID, payload)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -78,3 +116,100 @@ func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 // PUT /workorders/{code}/insurance
 
 //Patch /workorders/{code}
+
+func (h *Handler) BuildWorkOrderPDF(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	woID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workorder id", http.StatusBadRequest)
+		return
+	}
+
+	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	pdfBytes, err := BuildWorkOrderPDF(woDetail)
+	if err != nil {
+		http.Error(w, "Failed to build PDF", http.StatusInternalServerError)
+		return
+	}
+
+	filename := fmt.Sprintf("%s.pdf", woDetail.Code)
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(pdfBytes)
+}
+
+func (h *Handler) EmailWorkOrderReport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 和看详情 / 下 PDF 一样的权限
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	woID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workorder id", http.StatusBadRequest)
+		return
+	}
+
+	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	pdfBytes, err := BuildWorkOrderPDF(woDetail)
+	if err != nil {
+		http.Error(w, "Failed to build PDF", http.StatusInternalServerError)
+		return
+	}
+
+	sender, err := NewSMTPSenderFromEnv()
+	if err != nil {
+		http.Error(w, "SMTP not configured", http.StatusInternalServerError)
+		return
+	}
+
+	err = sender.SendWorkOrderReport(
+		ctx,
+		woDetail.Customer.Email,
+		woDetail.Customer.FullName,
+		woDetail.Code,
+		pdfBytes,
+	)
+	if err != nil {
+		http.Error(w, "Failed to send email", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Work order report emailed successfully",
+	})
+}

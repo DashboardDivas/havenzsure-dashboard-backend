@@ -15,9 +15,9 @@ import (
 )
 
 type Repository interface {
-	ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error)
-	GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error)
-	CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
+	ListWorkOrder(ctx context.Context, authUser uuid.UUID) ([]dto.WorkOrderListItem, error)
+	GetWorkOrderByID(ctx context.Context, authUser uuid.UUID, id uuid.UUID) (dto.WorkOrderDetail, error)
+	CreateWorkOrder(ctx context.Context, createdByUser uuid.UUID, payload dto.IntakePayload) (dto.WorkOrderDetail, error)
 	//EditorIntake(ctx context.Context, code string, payload dto.IntakeEditPayload) (dto.WorkOrderDetail, error)
 }
 
@@ -29,7 +29,7 @@ func NewRepository(db *pgxpool.Pool) Repository {
 	return &repository{db: db}
 }
 
-func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem, error) {
+func (r *repository) ListWorkOrder(ctx context.Context, authUser uuid.UUID) ([]dto.WorkOrderListItem, error) {
 	rows, err := r.db.Query(ctx, `
 	SELECT 
 		wo.id,
@@ -79,7 +79,8 @@ func (r *repository) ListWorkOrder(ctx context.Context) ([]dto.WorkOrderListItem
 	return result, rows.Err()
 }
 
-func (r *repository) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.WorkOrderDetail, error) {
+// authUser is accepted for future use (e.g., for auditing or access control), but is currently unused.
+func (r *repository) GetWorkOrderByID(ctx context.Context, authUser uuid.UUID, id uuid.UUID) (dto.WorkOrderDetail, error) {
 	var detail dto.WorkOrderDetail
 	row := r.db.QueryRow(ctx, `
 		SELECT
@@ -185,8 +186,9 @@ func (r *repository) GetWorkOrderByID(ctx context.Context, id uuid.UUID) (dto.Wo
 	return detail, nil
 }
 
-func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
+func (r *repository) CreateWorkOrder(ctx context.Context, authUser uuid.UUID, payload dto.IntakePayload) (dto.WorkOrderDetail, error) {
 	tx, err := r.db.Begin(ctx)
+
 	if err != nil {
 		return dto.WorkOrderDetail{}, err
 	}
@@ -253,12 +255,13 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 	var workOrderCode string
 	err = tx.QueryRow(ctx, `
 		INSERT INTO app.work_orders
-		(customer_id, vehicle_id, shop_id)
-		VALUES ($1, $2, $3)
+		(customer_id, vehicle_id, shop_id,created_by_user_id)
+		VALUES ($1, $2, $3, $4)
 		RETURNING id, code
 		`, customerID,
 		vehicleID,
 		shopID,
+		authUser,
 	).Scan(&workOrderID, &workOrderCode)
 	if err != nil {
 		return dto.WorkOrderDetail{}, fmt.Errorf("insert work_order: %w", err)
@@ -290,7 +293,7 @@ func (r *repository) CreateWorkOrder(ctx context.Context, payload dto.IntakePayl
 	if err := tx.Commit(ctx); err != nil {
 		return dto.WorkOrderDetail{}, err
 	}
-	return r.GetWorkOrderByID(ctx, workOrderID)
+	return r.GetWorkOrderByID(ctx, authUser, workOrderID)
 }
 
 type execer interface {

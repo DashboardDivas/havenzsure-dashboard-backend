@@ -95,7 +95,7 @@ func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !platformAuth.Can(platformAuth.RoleCode(actor.RoleCode), PermissionWorkOrderCreate) {
-		http.Error(w, "forbidden", http.StatusForbidden)
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 	var payload dto.IntakePayload

@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -125,7 +127,8 @@ func mapPgError(err error) error {
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
-	return err
+	log.Printf("[User DB] Unexpected database error: %v", err)
+	return fmt.Errorf("database operation failed")
 }
 
 /* ---------- base SELECT with role join ---------- */

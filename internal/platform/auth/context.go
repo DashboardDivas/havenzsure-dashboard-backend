@@ -5,7 +5,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 
 	"github.com/google/uuid"
 )
@@ -45,7 +44,7 @@ func SetAuthUser(ctx context.Context, user *AuthUser) context.Context {
 func GetAuthUser(ctx context.Context) (*AuthUser, error) {
 	user, ok := ctx.Value(authUserKey).(*AuthUser)
 	if !ok || user == nil {
-		return nil, errors.New("no authenticated user in context")
+		return nil, ErrNoAuthUser
 	}
 	return user, nil
 }

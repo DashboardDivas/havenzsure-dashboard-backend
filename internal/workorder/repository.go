@@ -79,6 +79,7 @@ func (r *repository) ListWorkOrder(ctx context.Context, authUser uuid.UUID) ([]d
 	return result, rows.Err()
 }
 
+// authUser is accepted for future use (e.g., for auditing or access control), but is currently unused.
 func (r *repository) GetWorkOrderByID(ctx context.Context, authUser uuid.UUID, id uuid.UUID) (dto.WorkOrderDetail, error) {
 	var detail dto.WorkOrderDetail
 	row := r.db.QueryRow(ctx, `

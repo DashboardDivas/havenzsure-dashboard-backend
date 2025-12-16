@@ -18,9 +18,6 @@ var (
 	// ErrUserNotFound indicates token is valid but user doesn't exist in DB
 	ErrUserNotFound = errors.New("user not found")
 
-	// ErrNoAuthUser indicates no AuthUser found in context
-	ErrNoAuthUser = errors.New("no authenticated user in context")
-
 	// ErrUserInactive indicates user account has been deactivated
 	ErrUserInactive = errors.New("user account is inactive")
 

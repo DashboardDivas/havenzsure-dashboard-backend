@@ -29,6 +29,7 @@ func (h *Handler) RegisterRoutes(r chi.Router) {
 	r.Route("/{id}", func(r chi.Router) {
 		r.Get("/", h.GetWorkOrderByID)
 		r.Get("/pdf", h.BuildWorkOrderPDF)
+		r.Post("/email-report", h.EmailWorkOrderReport)
 	})
 }
 
@@ -153,4 +154,62 @@ func (h *Handler) BuildWorkOrderPDF(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(pdfBytes)
+}
+
+func (h *Handler) EmailWorkOrderReport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	authUser, err := platformAuth.GetAuthUser(ctx)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// 和看详情 / 下 PDF 一样的权限
+	if !platformAuth.Can(platformAuth.RoleCode(authUser.RoleCode), PermissionWorkOrderDetail) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+
+	idStr := chi.URLParam(r, "id")
+	woID, err := uuid.Parse(idStr)
+	if err != nil {
+		http.Error(w, "Invalid workorder id", http.StatusBadRequest)
+		return
+	}
+
+	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+
+	pdfBytes, err := BuildWorkOrderPDF(woDetail)
+	if err != nil {
+		http.Error(w, "Failed to build PDF", http.StatusInternalServerError)
+		return
+	}
+
+	sender, err := NewSMTPSenderFromEnv()
+	if err != nil {
+		http.Error(w, "SMTP not configured", http.StatusInternalServerError)
+		return
+	}
+
+	err = sender.SendWorkOrderReport(
+		ctx,
+		woDetail.Customer.Email,
+		woDetail.Customer.FullName,
+		woDetail.Code,
+		pdfBytes,
+	)
+	if err != nil {
+		http.Error(w, "Failed to send email", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Work order report emailed successfully",
+	})
 }

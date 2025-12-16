@@ -7,7 +7,6 @@ package middleware
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -56,16 +55,10 @@ func (m *AuthMiddleware) Verify(next http.Handler) http.Handler {
 		}
 
 		// 3. Query user from DB (by external_id)
-		// To do: consider err handling for DB errors separately
 		dbUser, err := m.userRepo.GetByExternalID(ctx, firebaseToken.UID)
 		if err != nil {
 			// User may exist in GCIP but not in DB (should not happen)
-			if errors.Is(err, user.ErrNotFound) {
-				writeAuthError(w, http.StatusUnauthorized, auth.ErrUserNotFound)
-			} else {
-				// Other DB errors
-				writeAuthError(w, http.StatusInternalServerError, errors.New("service temporarily unavailable"))
-			}
+			writeAuthError(w, http.StatusUnauthorized, auth.ErrUserNotFound)
 			return
 		}
 
@@ -138,7 +131,6 @@ func extractBearerToken(r *http.Request) (string, error) {
 
 // writeAuthError returns unified authentication error format
 func writeAuthError(w http.ResponseWriter, status int, err error) {
-	log.Printf("[Auth] %s (status=%d)", err.Error(), status)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

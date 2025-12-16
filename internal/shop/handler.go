@@ -167,11 +167,11 @@ func writeError(w http.ResponseWriter, err error) {
 	// Map domain errors to HTTP status codes
 	switch {
 	case errors.Is(err, ErrInvalidInput):
-		httpError(w, http.StatusBadRequest, err.Error())
+		httpError(w, http.StatusBadRequest, "invalid input")
 	case errors.Is(err, ErrConflict):
-		httpError(w, http.StatusConflict, err.Error())
+		httpError(w, http.StatusConflict, "conflict")
 	case errors.Is(err, ErrNotFound):
-		httpError(w, http.StatusNotFound, err.Error())
+		httpError(w, http.StatusNotFound, "not found")
 	default:
 		httpError(w, http.StatusInternalServerError, "internal error")
 	}

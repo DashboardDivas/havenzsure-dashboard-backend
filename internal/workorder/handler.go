@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
+
 	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 
 	"log"
@@ -222,7 +224,8 @@ func (h *Handler) EmailWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 func writeError(w http.ResponseWriter, err error) {
 	log.Printf("[WorkOrder ERROR] %v", err)
 
-	if errors.Is(err, ErrNotFound) {
+	// Note: pgx.ErrNoRows can be removed after repository maps it
+	if errors.Is(err, ErrNotFound) || errors.Is(err, pgx.ErrNoRows) {
 		http.Error(w, "work order not found", http.StatusNotFound)
 		return
 	}

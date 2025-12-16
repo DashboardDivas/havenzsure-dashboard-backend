@@ -2,8 +2,11 @@ package workorder
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/jackc/pgx/v5"
 
 	platformAuth "github.com/DashboardDivas/havenzsure-dashboard-backend/internal/platform/auth"
 
@@ -50,7 +53,7 @@ func (h *Handler) ListWorkOrder(w http.ResponseWriter, r *http.Request) {
 
 	items, err := h.service.ListWorkOrder(ctx, actor.ID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -79,7 +82,7 @@ func (h *Handler) GetWorkOrderByID(w http.ResponseWriter, r *http.Request) {
 
 	wo, err := h.service.GetWorkOrderByID(ctx, authUser.ID, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -105,7 +108,7 @@ func (h *Handler) CreateWorkOrder(w http.ResponseWriter, r *http.Request) {
 	}
 	wo, err := h.service.CreateWorkOrder(ctx, actor.ID, payload)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		writeError(w, err)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -139,7 +142,7 @@ func (h *Handler) BuildWorkOrderPDF(w http.ResponseWriter, r *http.Request) {
 
 	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, err)
 		return
 	}
 
@@ -180,7 +183,7 @@ func (h *Handler) EmailWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 
 	woDetail, err := h.service.GetWorkOrderByID(ctx, authUser.ID, woID)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		writeError(w, err)
 		return
 	}
 
@@ -212,4 +215,20 @@ func (h *Handler) EmailWorkOrderReport(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": "Work order report emailed successfully",
 	})
+}
+
+// writeError maps errors to safe HTTP responses
+// Note: Repository still returns detailed errors (fmt.Errorf),
+// but this handler catches them all and only returns generic messages.
+// TODO: Add mapPgError to repository.go for cleaner architecture
+func writeError(w http.ResponseWriter, err error) {
+	log.Printf("[WorkOrder ERROR] %v", err)
+
+	// Note: pgx.ErrNoRows can be removed after repository maps it
+	if errors.Is(err, ErrNotFound) || errors.Is(err, pgx.ErrNoRows) {
+		http.Error(w, "work order not found", http.StatusNotFound)
+		return
+	}
+
+	http.Error(w, "internal error", http.StatusInternalServerError)
 }
